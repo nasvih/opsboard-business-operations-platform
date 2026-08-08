@@ -27,6 +27,8 @@
 .about__list li{position:relative;padding-left:15px;font-size:13.5px;line-height:1.5}
 .about__list li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;
   border-radius:var(--r-xs);background:var(--amber-fill)}
+.about__source{margin-top:12px}
+.about__source p{font-size:13px;margin-bottom:10px}
 
 /* Rail mode and the yellow tone come from app.css. Below are the pieces the
    shared kit does not know about — this app's workspace switcher, the footer

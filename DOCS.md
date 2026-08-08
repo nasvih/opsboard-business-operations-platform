@@ -312,10 +312,24 @@ edited by hand, and every value is an existing token:
 | `.btn--ghost` ("About this demo") inherited the solid footer button style and lost its rank | transparent with an ink hairline on yellow, white on hover |
 | `aria-pressed` on the two toggles had no visible counterpart | pressed = `--amber-soft` with an amber edge on white, a solid white chip with an ink edge on yellow |
 
-Ink text on `#EAC81C` is 10.9:1. Nothing renders white text on yellow anywhere. The one dark element
-in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground, white text, `--night-2` on
-hover); in rail mode it collapses to its icon like the other footer controls, keeping the label in
-`title` and `aria-label`.
+Ink text on `#EAC81C` is 10.9:1. Nothing renders white text on yellow anywhere. The one inverted
+element in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground, white text,
+`--night-2` on hover). The **Source on GitHub** link next to it is a plain outline control, so the
+dark treatment stays unique. Both are built by `outLink(url, label, icon, cls)` in `src/main.js`,
+which sets `target="_blank"`, `rel="noopener noreferrer"`, a `title` and an `aria-label` ending in
+"opens in a new tab"; in rail mode both collapse to their icon like the other footer controls,
+keeping the label in `title` and `aria-label`.
+
+The two glyphs those links use — an arrow leaving a box and code brackets — are written inline in
+`src/main.js` in the kit's 20×20 stroke style, because `ICONS` in `lib/ui.js` carries neither and
+`lib/ui.js` is a verbatim copy. Both are stroke-only, so they inherit `currentColor` like every
+other icon; no icon font and no emoji.
+
+`SOURCE_URL` and `SOURCE_NOTE` also feed the About modal, where `aboutModal()` appends an
+`.about__source` block under the fourth block. The note repeats what `LICENSE` says — published to
+be read, run and evaluated, not open source, and copying, modifying, redistributing, deploying or
+training on it needs written permission. If the licence changes, change `SOURCE_NOTE`, `LICENSE` and
+the Licence section of `README.md` together.
 
 ---
 

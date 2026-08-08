@@ -6,7 +6,12 @@ every assistant answer re-scopes to that tenant.
 
 No build step, no dependencies, no network calls. Open it from any static file server.
 
+**Repository:** <https://github.com/nasvih/opsboard-business-operations-platform>
+
 **Author:** Muhammed Nasvih V — [nasvih.in](https://www.nasvih.in) · [github.com/nasvih](https://github.com/nasvih)
+
+The source is published so it can be read, run and evaluated. It is not open source — see
+[Licence](#licence).
 
 ---
 
@@ -92,9 +97,9 @@ on every later visit, and the button's `aria-pressed` state and its solid white 
 follow. Next to it, **Collapse** shrinks the sidebar to a 64px icon rail — a desktop control, since
 below 900px the sidebar is already a drawer behind the menu button.
 
-The footer then holds **Reset demo data**, **About this demo** and a link out to
-[nasvih.in](https://www.nasvih.in), which opens in a new tab. When the app can be installed, an
-**Install app** button appears above them.
+The footer then holds **Reset demo data**, **About this demo**, a link out to
+[nasvih.in](https://www.nasvih.in) and a **Source on GitHub** link to this repository — both open in
+a new tab. When the app can be installed, an **Install app** button appears above them.
 
 ### Opsboard Copilot
 

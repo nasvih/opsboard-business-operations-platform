@@ -29,11 +29,28 @@ const NAV = [
   { id: 'settings', label: 'Settings', icon: 'cog', group: 'Administration', view: settings },
 ];
 
-/* arrow leaving a box — the shared icon set has no "external link" glyph,
-   so it is written here in the same 20x20 stroke style as the rest */
+/* Two glyphs the shared icon set does not carry, written here in the same
+   20x20 stroke style: an arrow leaving a box, and code brackets. Both are
+   stroke-only so they inherit currentColor like every other icon. */
 const EXTERNAL_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
   + '<path d="M11.5 3.5h5v5"/><path d="M16.5 3.5L9.5 10.5"/>'
   + '<path d="M14.5 11.5v4a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 15.5V7a1.5 1.5 0 0 1 1.5-1.5h4"/></svg>';
+
+const CODE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
+  + '<path d="M7 6.5L3.5 10 7 13.5"/><path d="M13 6.5L16.5 10 13 13.5"/><path d="M11.2 4.2l-2.4 11.6"/></svg>';
+
+const SOURCE_URL = 'https://github.com/nasvih/opsboard-business-operations-platform';
+const SOURCE_NOTE = 'The source is published so it can be read, run and evaluated, but it is not '
+  + 'open source: copying, modifying, redistributing, deploying it or using it as training data '
+  + 'needs written permission. See the LICENSE file in the repository.';
+
+/* One "opens in a new tab" link, used in the sidebar footer and the About modal. */
+function outLink(url, label, iconHtml, cls = 'btn btn--block') {
+  return h('a', {
+    class: cls, href: url, target: '_blank', rel: 'noopener noreferrer',
+    title: label, 'aria-label': `${label} — opens in a new tab`,
+  }, h('span', { html: iconHtml }).firstChild, h('span', {}, label));
+}
 
 const TITLES = Object.fromEntries(NAV.map((n) => [n.id, n.label]));
 const app = qs('#app');
@@ -145,6 +162,10 @@ function aboutModal() {
       block.list
         ? h('ul', { class: 'about__list' }, block.list.map((line) => h('li', { class: 'muted' }, line)))
         : null)));
+  /* sits under the fourth block, saying the same thing the LICENSE file does */
+  body.appendChild(h('div', { class: 'about__source' },
+    h('p', { class: 'muted' }, SOURCE_NOTE),
+    outLink(SOURCE_URL, 'Source on GitHub', CODE_ICON, 'btn btn--sm')));
   modal({
     title: 'About this demo',
     body,
@@ -223,13 +244,11 @@ function buildShell() {
       class: 'btn btn--ghost btn--block', title: 'About this demo', 'aria-label': 'About this demo',
       onclick: aboutModal,
     }, iconEl('eye'), h('span', {}, 'About this demo')),
-    h('a', {
-      /* the author's site — the one dark control in the sidebar, so it reads
-         as an exit from the demo whichever colour the sidebar is wearing */
-      class: 'btn btn--block btn--site', href: 'https://www.nasvih.in',
-      target: '_blank', rel: 'noopener noreferrer',
-      title: 'nasvih.in', 'aria-label': 'nasvih.in — opens in a new tab',
-    }, h('span', { html: EXTERNAL_ICON }).firstChild, h('span', {}, 'nasvih.in')),
+    /* the author's site — the one inverted control in the sidebar, so it reads
+       as an exit from the demo whichever colour the sidebar is wearing. The
+       repository link beside it stays an ordinary outline control. */
+    outLink('https://www.nasvih.in', 'nasvih.in', EXTERNAL_ICON, 'btn btn--block btn--site'),
+    outLink(SOURCE_URL, 'Source on GitHub', CODE_ICON),
     h('p', { class: 'side__note' },
       'Sample data only. Saved in this browser, never sent anywhere.')));
 
