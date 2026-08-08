@@ -63,6 +63,10 @@ Every one of these writes to `localStorage` and survives a reload:
 **Reset demo data** in the sidebar footer (and in Settings) rebuilds all three workspaces from the
 seed and throws away every edit.
 
+The sidebar footer also holds two chrome controls, both remembered in `localStorage`: **Collapse**
+shrinks the sidebar to a 64px icon rail (a desktop control — below 900px the sidebar stays a
+drawer), and **Yellow** switches the sidebar to the brand colour.
+
 ### Opsboard Copilot
 
 The in-product assistant. Press `⌘K` / `Ctrl+K`, or use the launcher in the bottom right. It has no

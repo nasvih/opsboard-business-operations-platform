@@ -20,8 +20,22 @@
 .about__block+.about__block{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 .about__block h4{margin-bottom:5px}
 .about__block p{font-size:13.5px}
-.hide-sm{display:inline}
-.topbar .kbd{margin-left:2px}
+
+/* Rail mode and the yellow tone come from app.css. These are the two pieces
+   the shared kit does not know about: this app's workspace switcher and the
+   footer note. Colours are the kit's own values, nothing new is introduced. */
+.shell.is-rail .wsw{padding:10px 8px}
+.shell.is-rail .wsw__label,
+.shell.is-rail .wsw__meta,
+.shell.is-rail .wsw__chev,
+.shell.is-rail .side__note{display:none}
+.shell.is-rail .wsw__btn{justify-content:center;padding:8px 0}
+.side[data-tone="amber"] .wsw{border-color:rgba(23,24,26,.16)}
+.side[data-tone="amber"] .wsw__label,
+.side[data-tone="amber"] .side__note{color:var(--amber-darker)}
+.side[data-tone="amber"] .wsw__btn{background:rgba(255,255,255,.72);border-color:rgba(23,24,26,.18);color:var(--ink)}
+.side[data-tone="amber"] .wsw__btn:hover{background:var(--bg);border-color:rgba(23,24,26,.28)}
+.side[data-tone="amber"] .avatar--amber{background:var(--ink);color:var(--amber-fill)}
 
 /* == 2. workspace switcher == */
 .wsw{position:relative;padding:12px;border-bottom:1px solid var(--line);flex:none}
@@ -103,12 +117,13 @@
 @media (max-width:900px){
   .aging__row{grid-template-columns:88px minmax(0,1fr) 96px}
   .aging__row>:last-child{display:none}
+  /* the sidebar is a drawer down here, so there is nothing to collapse */
+  .side__toggles [data-chrome="rail"]{display:none}
 }
 @media (max-width:640px){
   .filterbar{gap:10px}
   .filterbox{min-width:0;flex:1}
   .search{max-width:none;width:100%}
-  .hide-sm{display:none}
   .kboard{grid-template-columns:minmax(0,1fr);overflow-x:visible}
   .kcol{min-width:0}
   .deflist{grid-template-columns:minmax(0,1fr);gap:2px 0}

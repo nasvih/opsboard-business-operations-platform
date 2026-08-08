@@ -33,6 +33,55 @@ const app = qs('#app');
 let current = 'overview';
 let nav;
 
+/* ---------- sidebar chrome (rail + tone), remembered per browser ---------- */
+
+const CHROME_KEY = 'opsboard.chrome.v1';
+/* the rail is a desktop idea; under 900px the sidebar is a drawer and stays one */
+const DESKTOP = window.matchMedia('(min-width:901px)');
+
+const chrome = (() => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CHROME_KEY) || '{}');
+    return { rail: saved.rail === true, tone: saved.tone === true };
+  } catch (_) { return { rail: false, tone: false }; }
+})();
+
+function saveChrome() {
+  try { localStorage.setItem(CHROME_KEY, JSON.stringify(chrome)); } catch (_) { /* storage full or blocked */ }
+}
+
+function applyChrome() {
+  app.classList.toggle('is-rail', chrome.rail && DESKTOP.matches);
+  if (nav) {
+    if (chrome.tone) nav.side.setAttribute('data-tone', 'amber');
+    else nav.side.removeAttribute('data-tone');
+  }
+  const rail = qs('[data-chrome="rail"]');
+  if (rail) {
+    const label = chrome.rail ? 'Expand the sidebar' : 'Collapse the sidebar to icons';
+    rail.setAttribute('aria-pressed', String(chrome.rail));
+    rail.setAttribute('aria-label', label);
+    rail.title = label;
+    const text = qs('span', rail);
+    if (text) text.textContent = chrome.rail ? 'Expand' : 'Collapse';
+  }
+  const tone = qs('[data-chrome="tone"]');
+  if (tone) {
+    const label = chrome.tone ? 'Use the default sidebar colour' : 'Switch the sidebar to brand yellow';
+    tone.setAttribute('aria-pressed', String(chrome.tone));
+    tone.setAttribute('aria-label', label);
+    tone.title = label;
+  }
+}
+
+function setChrome(key, value) {
+  chrome[key] = value;
+  saveChrome();
+  applyChrome();
+}
+
+DESKTOP.addEventListener('change', applyChrome);
+
 /* ---------- about this demo ---------- */
 
 const ABOUT = [
@@ -88,7 +137,9 @@ function buildShell() {
     const box = h('div', { class: 'navgroup' }, h('div', { class: 'navgroup__label' }, g.name));
     g.items.forEach((item) => {
       box.appendChild(h('button', {
+        /* title and aria-label carry the name once the rail hides the text */
         class: 'navlink', type: 'button', dataset: { nav: item.id },
+        title: item.label, 'aria-label': item.label,
         onclick: () => { location.hash = `#/${item.id}`; closeSidebar(); },
       },
       iconEl(item.icon),
@@ -100,8 +151,20 @@ function buildShell() {
   side.appendChild(navEl);
 
   side.appendChild(h('div', { class: 'side__foot stack' },
+    h('div', { class: 'side__toggles' },
+      h('button', {
+        class: 'btn btn--sm', type: 'button', dataset: { chrome: 'rail' },
+        'aria-pressed': 'false', 'aria-controls': 'sidebar',
+        onclick: () => setChrome('rail', !chrome.rail),
+      }, iconEl('table'), h('span', {}, 'Collapse')),
+      h('button', {
+        class: 'btn btn--sm', type: 'button', dataset: { chrome: 'tone' },
+        'aria-pressed': 'false', 'aria-controls': 'sidebar',
+        onclick: () => setChrome('tone', !chrome.tone),
+      }, iconEl('tag'), h('span', {}, 'Yellow'))),
     h('button', {
-      class: 'btn btn--block',
+      /* label in a span so the rail can hide it; title keeps it readable there */
+      class: 'btn btn--block', title: 'Reset demo data', 'aria-label': 'Reset demo data',
       onclick: async () => {
         const ok = await confirmDialog('All three workspaces will be regenerated from the seed. Every edit you have made in this browser will be lost.',
           { title: 'Reset demo data', danger: true, okLabel: 'Reset everything' });
@@ -110,9 +173,11 @@ function buildShell() {
         toast('Demo data reset', 'ok');
         paint(true);
       },
-    }, iconEl('refresh'), 'Reset demo data'),
-    h('button', { class: 'btn btn--ghost btn--block', onclick: aboutModal },
-      iconEl('eye'), 'About this demo'),
+    }, iconEl('refresh'), h('span', {}, 'Reset demo data')),
+    h('button', {
+      class: 'btn btn--ghost btn--block', title: 'About this demo', 'aria-label': 'About this demo',
+      onclick: aboutModal,
+    }, iconEl('eye'), h('span', {}, 'About this demo')),
     h('p', { class: 'side__note' },
       'Sample data only. Saved in this browser, never sent anywhere.')));
 
@@ -133,11 +198,9 @@ function buildShell() {
       title: 'Demo build: all records are generated locally and stored in this browser only. Open for details.',
       'aria-label': 'About this demo',
       onclick: aboutModal,
-    }, 'Demo'),
-    h('button', {
-      class: 'btn btn--sm', 'aria-label': 'Open the Opsboard Copilot',
-      onclick: () => window.__opsboardCopilot && window.__opsboardCopilot.toggle(true),
-    }, iconEl('spark'), h('span', { class: 'hide-sm' }, 'Copilot'), h('span', { class: 'kbd hide-sm' }, '⌘K')));
+    }, 'Demo'));
+  /* The copilot has exactly one entry point: the round launcher the assistant
+     mounts bottom-right, plus its own Cmd/Ctrl+K shortcut. No topbar twin. */
 
   const viewHost = h('main', { class: 'viewhost', id: 'main-view', tabindex: '-1' });
   /* on narrow screens, tapping the content area closes the slide-over nav */
@@ -156,6 +219,9 @@ function workspaceSwitcher() {
   const btn = h('button', {
     class: 'wsw__btn', type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': 'false',
     onclick: () => {
+      /* the list needs room the 64px rail does not have, so picking a
+         workspace from the rail expands the sidebar first */
+      if (app.classList.contains('is-rail')) { setChrome('rail', false); }
       const open = box.classList.toggle('is-open');
       btn.setAttribute('aria-expanded', String(open));
     },
@@ -165,6 +231,8 @@ function workspaceSwitcher() {
   const paintSwitcher = () => {
     const ws = activeWorkspace();
     btn.innerHTML = '';
+    btn.title = `Workspace: ${ws.name}. Choose another.`;
+    btn.setAttribute('aria-label', `Workspace: ${ws.name}. Choose another.`);
     btn.append(
       h('span', { class: 'avatar avatar--amber' }, ws.short),
       h('span', { class: 'wsw__meta' },
@@ -272,6 +340,7 @@ function paint(full) {
 /* ---------- boot ---------- */
 
 buildShell();
+applyChrome();
 
 const routes = Object.fromEntries(NAV.map((n) => [n.id, n]));
 const r = router(routes, (name) => {
@@ -280,8 +349,8 @@ const r = router(routes, (name) => {
 });
 r.go();
 
-const copilot = createCopilot().mount(document.body);
-window.__opsboardCopilot = copilot;
+/* one launcher, bottom right, plus the Cmd/Ctrl+K the assistant binds itself */
+createCopilot().mount(document.body);
 
 /* keyboard: / focuses the first search box, Alt+1..7 jumps between screens */
 document.addEventListener('keydown', (e) => {
