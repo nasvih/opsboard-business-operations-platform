@@ -295,6 +295,17 @@ deliberate about the difference between *unset* and *false*:
 buttons' `aria-pressed`, `aria-label` and `title` from the same state, so what a screen reader is
 told can never drift from what is on screen. `setChrome(key, value)` persists and calls it.
 
+Both controls live in `.side__brandbtns`, on the brand row beside the app name, and carry no
+visible text — the kit clips their `<span>` and sizes them to 30×30. The rail control names the
+action it performs (*Collapse sidebar* / *Expand sidebar*) and swaps its glyph with the state; the
+colour control never names a colour at all, keeping a fixed *Sidebar colour* for `title` and
+`aria-label` and reporting the yellow tone only through `aria-pressed`. Their two glyphs —
+a panel with a chevron, and a circle half filled — are written inline in `src/main.js` in the
+kit's 20×20 stroke style for the same reason the link glyphs are: `ICONS` carries neither and
+`lib/ui.js` is a verbatim copy. In rail mode `.shell.is-rail .side__brandbtns` stacks them into a
+column under the mark, so both stay reachable inside 64px. Below 900px the rail control is hidden
+in `assets/opsboard.css`, because a drawer has nothing to collapse.
+
 ### What the yellow default changes
 
 `app.css` already carried the `.side[data-tone="amber"]` block; making it the default exposed a few
@@ -310,7 +321,7 @@ edited by hand, and every value is an existing token:
 | `.wsw__label` and `.side__note` are this app's labels and used `--amber-darker` too | `--ink-2` on the amber sidebar only |
 | The skip link is an amber fill and lands on top of the sidebar, so it vanished into it | 2px ink border plus an ink focus ring |
 | `.btn--ghost` ("About this demo") inherited the solid footer button style and lost its rank | transparent with an ink hairline on yellow, white on hover |
-| `aria-pressed` on the two toggles had no visible counterpart | pressed = `--amber-soft` with an amber edge on white, a solid white chip with an ink edge on yellow |
+| `aria-pressed` on the two brand-row controls had no visible counterpart | pressed = `--amber-soft` with an amber edge on white, a solid white chip with an ink edge on yellow |
 
 Ink text on `#EAC81C` is 10.9:1. Nothing renders white text on yellow anywhere. The one inverted
 element in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground, white text,
@@ -350,10 +361,12 @@ Three pieces, all at the app root so the scope covers everything:
 initPWA({ mount: qs('.side__pwa'), appName: 'Opsboard', onNote: (msg) => toast(msg, 'info') });
 ```
 
-`.side__pwa` is an empty slot in the sidebar footer, between the chrome toggles and "Reset demo
-data". It collapses while it holds nothing visible, so nothing moves on browsers that never offer an
-install. `onNote` goes through the app's own `toast`, which is how the iOS "Share → Add to Home
-Screen" instruction is delivered — Safari fires no install event.
+`.side__pwa` is the last `.side__pair` row in the sidebar footer, the one holding "Reset demo
+data". `initPWA` appends, so `main.js` moves the returned control to the head of that row; while it
+is hidden `[hidden]{display:none!important}` takes it out of the flex row entirely and Reset spans
+the row on its own, so nothing moves on browsers that never offer an install. `onNote` goes through
+the app's own `toast`, which is how the iOS "Share → Add to Home Screen" instruction is delivered —
+Safari fires no install event.
 
 **When you add, rename or delete a file, add it to `SHELL` in `sw.js` and bump `CACHE_VERSION`.**
 A path that 404s fails the whole `addAll`, and the install handler swallows that failure to avoid
@@ -451,8 +464,9 @@ For the installable side, in the browser:
    is non-null and the cache holds one entry per `SHELL` path.
 3. **Offline** — stop the server, reload: the shell, the workspace and every screen still render, and
    the console stays clean.
-4. **Sidebar** — a fresh profile shows the yellow sidebar with `aria-pressed="true"` on the Yellow
-   toggle; switching it off, reloading, switching it back and reloading again both persist.
+4. **Sidebar** — a fresh profile shows the yellow sidebar with `aria-pressed="true"` on the
+   *Sidebar colour* control in the brand row; switching it off, reloading, switching it back and
+   reloading again both persist, as does the rail.
 5. **390px** — every screen with no horizontal page scroll.
 
 Last verified: manifest parses with three icons, all 22 `SHELL` paths return 200, the worker

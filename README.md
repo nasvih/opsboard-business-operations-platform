@@ -91,15 +91,22 @@ seed and throws away every edit.
 
 ### The sidebar
 
-The navigation is **brand yellow by default**. The **Yellow** button in the footer turns it off for
-a plain white sidebar and back on again; whichever you pick is remembered in `localStorage` and used
-on every later visit, and the button's `aria-pressed` state and its solid white "on" chip both
-follow. Next to it, **Collapse** shrinks the sidebar to a 64px icon rail — a desktop control, since
-below 900px the sidebar is already a drawer behind the menu button.
+Two icon-only controls sit on the brand row at the top of the sidebar, right of the app name.
 
-The footer then holds **Reset demo data**, **About this demo**, a link out to
-[nasvih.in](https://www.nasvih.in) and a **Source on GitHub** link to this repository — both open in
-a new tab. When the app can be installed, an **Install app** button appears above them.
+The navigation is **brand yellow by default**. The right-hand control — a circle half filled —
+switches between the yellow sidebar and a plain white one. It names no colour: it is labelled
+*Sidebar colour* for screen readers and reports the yellow tone through `aria-pressed`. Whichever
+you pick is remembered in `localStorage` and used on every later visit.
+
+Beside it, the panel-and-chevron control shrinks the sidebar to a 64px icon rail (*Collapse
+sidebar* / *Expand sidebar*). That is a desktop control: below 900px the sidebar is already a
+drawer behind the menu button, so it is hidden there. In the rail the brand row stacks and both
+controls stay reachable.
+
+The footer holds **About this demo** across the top, then [nasvih.in](https://www.nasvih.in)
+beside a **Source on GitHub** link to this repository — both open in a new tab — and then
+**Reset demo data**. When the browser offers an install, an **Install app** button appears next
+to Reset on that last row; until then Reset has the row to itself.
 
 ### Opsboard Copilot
 
@@ -135,7 +142,8 @@ Opsboard is a progressive web app. Served over HTTP or HTTPS it registers a serv
 its own shell, and can be installed to the desktop or home screen where it opens in its own window
 with no browser chrome.
 
-- **Chrome, Edge, Brave:** an **Install app** button appears in the sidebar footer once the browser
+- **Chrome, Edge, Brave:** an **Install app** button appears in the sidebar footer, beside
+  "Reset demo data", once the browser
   offers the prompt, or use the install icon in the address bar.
 - **iPhone and iPad:** Safari has no install prompt, so the same button explains the route —
   Share → *Add to Home Screen*.

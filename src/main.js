@@ -39,6 +39,28 @@ const EXTERNAL_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
 const CODE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
   + '<path d="M7 6.5L3.5 10 7 13.5"/><path d="M13 6.5L16.5 10 13 13.5"/><path d="M11.2 4.2l-2.4 11.6"/></svg>';
 
+/* The two sidebar chrome controls sit on the brand row and carry no visible
+   text, so their glyphs have to say what they do on their own. A panel with a
+   chevron for the rail — pointing at the edge it is about to move — and a
+   circle half filled for the colour switch. Same 20x20 stroke style as the
+   rest of the set, so they inherit currentColor. */
+const RAIL_ICON = {
+  collapse: '<svg viewBox="0 0 20 20" aria-hidden="true">'
+    + '<rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2"/><path d="M8 3.75v12.5"/>'
+    + '<path d="M13.6 7.9L11.5 10l2.1 2.1"/></svg>',
+  expand: '<svg viewBox="0 0 20 20" aria-hidden="true">'
+    + '<rect x="2.75" y="3.75" width="14.5" height="12.5" rx="2"/><path d="M8 3.75v12.5"/>'
+    + '<path d="M11.5 7.9L13.6 10l-2.1 2.1"/></svg>',
+};
+const TONE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
+  + '<circle cx="10" cy="10" r="6.6"/>'
+  + '<path d="M10 3.4a6.6 6.6 0 0 1 0 13.2z" fill="currentColor" stroke="none"/></svg>';
+
+/* The colour control never names a colour: the glyph carries it, and the
+   accessible name stays neutral while aria-pressed reports the yellow tone. */
+const TONE_LABEL = 'Sidebar colour';
+const railLabel = (railed) => (railed ? 'Expand sidebar' : 'Collapse sidebar');
+
 const SOURCE_URL = 'https://github.com/nasvih/opsboard-business-operations-platform';
 const SOURCE_NOTE = 'The source is published so it can be read, run and evaluated, but it is not '
   + 'open source: copying, modifying, redistributing, deploying it or using it as training data '
@@ -91,19 +113,19 @@ function applyChrome() {
   }
   const rail = qs('[data-chrome="rail"]');
   if (rail) {
-    const label = chrome.rail ? 'Expand the sidebar' : 'Collapse the sidebar to icons';
+    const label = railLabel(chrome.rail);
     rail.setAttribute('aria-pressed', String(chrome.rail));
     rail.setAttribute('aria-label', label);
     rail.title = label;
-    const text = qs('span', rail);
-    if (text) text.textContent = chrome.rail ? 'Expand' : 'Collapse';
+    /* the span stays for the same reason the nav links keep theirs: the kit
+       clips it out of sight in the brand row but it keeps the markup uniform */
+    rail.innerHTML = `${chrome.rail ? RAIL_ICON.expand : RAIL_ICON.collapse}<span>${label}</span>`;
   }
   const tone = qs('[data-chrome="tone"]');
   if (tone) {
-    const label = chrome.tone ? 'Use the default sidebar colour' : 'Switch the sidebar to brand yellow';
     tone.setAttribute('aria-pressed', String(chrome.tone));
-    tone.setAttribute('aria-label', label);
-    tone.title = label;
+    tone.setAttribute('aria-label', TONE_LABEL);
+    tone.title = TONE_LABEL;
   }
 }
 
@@ -185,7 +207,22 @@ function buildShell() {
       h('span', { class: 'mark' }, 'OB'),
       h('div', { style: 'min-width:0' },
         h('div', { class: 'side__name' }, 'Opsboard'),
-        h('div', { class: 'side__tag' }, 'Operations platform'))));
+        h('div', { class: 'side__tag' }, 'Operations platform')),
+      /* rail and colour live on the brand row: icon-only, right-aligned, and
+         stacked by the kit when the sidebar narrows to the rail */
+      h('div', { class: 'side__brandbtns' },
+        h('button', {
+          class: 'btn btn--sm', type: 'button', dataset: { chrome: 'rail' },
+          'aria-pressed': 'false', 'aria-controls': 'sidebar',
+          title: railLabel(false), 'aria-label': railLabel(false),
+          onclick: () => setChrome('rail', !chrome.rail),
+        }, h('span', { html: RAIL_ICON.collapse }).firstChild, h('span', {}, railLabel(false))),
+        h('button', {
+          class: 'btn btn--sm', type: 'button', dataset: { chrome: 'tone' },
+          'aria-pressed': 'false', 'aria-controls': 'sidebar',
+          title: TONE_LABEL, 'aria-label': TONE_LABEL,
+          onclick: () => setChrome('tone', !chrome.tone),
+        }, h('span', { html: TONE_ICON }).firstChild, h('span', {}, TONE_LABEL)))));
 
   side.appendChild(workspaceSwitcher());
 
@@ -213,33 +250,10 @@ function buildShell() {
   });
   side.appendChild(navEl);
 
+  /* Footer, top to bottom: About on its own, then the two links, then install
+     and reset. The paired rows share their width and truncate rather than
+     overflow, and the kit stacks them back into a column in the rail. */
   side.appendChild(h('div', { class: 'side__foot stack' },
-    h('div', { class: 'side__toggles' },
-      h('button', {
-        class: 'btn btn--sm', type: 'button', dataset: { chrome: 'rail' },
-        'aria-pressed': 'false', 'aria-controls': 'sidebar',
-        onclick: () => setChrome('rail', !chrome.rail),
-      }, iconEl('table'), h('span', {}, 'Collapse')),
-      h('button', {
-        class: 'btn btn--sm', type: 'button', dataset: { chrome: 'tone' },
-        'aria-pressed': 'false', 'aria-controls': 'sidebar',
-        onclick: () => setChrome('tone', !chrome.tone),
-      }, iconEl('tag'), h('span', {}, 'Yellow'))),
-    /* the install control is added here by initPWA, only when installing is
-       actually possible; the slot collapses while it is empty */
-    h('div', { class: 'side__pwa' }),
-    h('button', {
-      /* label in a span so the rail can hide it; title keeps it readable there */
-      class: 'btn btn--block', title: 'Reset demo data', 'aria-label': 'Reset demo data',
-      onclick: async () => {
-        const ok = await confirmDialog('All three workspaces will be regenerated from the seed. Every edit you have made in this browser will be lost.',
-          { title: 'Reset demo data', danger: true, okLabel: 'Reset everything' });
-        if (!ok) return;
-        resetDemo();
-        toast('Demo data reset', 'ok');
-        paint(true);
-      },
-    }, iconEl('refresh'), h('span', {}, 'Reset demo data')),
     h('button', {
       class: 'btn btn--ghost btn--block', title: 'About this demo', 'aria-label': 'About this demo',
       onclick: aboutModal,
@@ -247,8 +261,27 @@ function buildShell() {
     /* the author's site — the one inverted control in the sidebar, so it reads
        as an exit from the demo whichever colour the sidebar is wearing. The
        repository link beside it stays an ordinary outline control. */
-    outLink('https://www.nasvih.in', 'nasvih.in', EXTERNAL_ICON, 'btn btn--block btn--site'),
-    outLink(SOURCE_URL, 'Source on GitHub', CODE_ICON),
+    /* paired rows run at the small size — it is what initPWA builds its own
+       control at, so Install and Reset match, and it keeps nasvih.in whole */
+    h('div', { class: 'side__pair' },
+      outLink('https://www.nasvih.in', 'nasvih.in', EXTERNAL_ICON, 'btn btn--block btn--sm btn--site'),
+      outLink(SOURCE_URL, 'Source on GitHub', CODE_ICON, 'btn btn--block btn--sm')),
+    /* initPWA puts its control at the head of this row, and only when the
+       browser actually offers an install; while it is absent or hidden the
+       row holds one item and Reset takes the full width on its own */
+    h('div', { class: 'side__pair side__pwa' },
+      h('button', {
+        /* label in a span so the rail can hide it; title keeps it readable there */
+        class: 'btn btn--block btn--sm', title: 'Reset demo data', 'aria-label': 'Reset demo data',
+        onclick: async () => {
+          const ok = await confirmDialog('All three workspaces will be regenerated from the seed. Every edit you have made in this browser will be lost.',
+            { title: 'Reset demo data', danger: true, okLabel: 'Reset everything' });
+          if (!ok) return;
+          resetDemo();
+          toast('Demo data reset', 'ok');
+          paint(true);
+        },
+      }, iconEl('refresh'), h('span', {}, 'Reset demo data'))),
     h('p', { class: 'side__note' },
       'Sample data only. Saved in this browser, never sent anywhere.')));
 
@@ -425,12 +458,15 @@ createCopilot().mount(document.body);
 
 /* installable: registers the service worker and, where the browser allows it,
    puts an "Install app" control in the sidebar footer. iOS has no prompt
-   event, so the instructions arrive through the app's own toast. */
-initPWA({
+   event, so the instructions arrive through the app's own toast. initPWA
+   appends, so the control is moved to the head of the row it shares with
+   Reset — hidden it takes no space at all, so the row never gaps. */
+const installBtn = initPWA({
   mount: qs('.side__pwa'),
   appName: 'Opsboard',
   onNote: (msg) => toast(msg, 'info'),
 });
+if (installBtn) installBtn.parentNode.insertBefore(installBtn, installBtn.parentNode.firstChild);
 
 /* keyboard: / focuses the first search box, Alt+1..7 jumps between screens */
 document.addEventListener('keydown', (e) => {

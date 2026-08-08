@@ -56,17 +56,13 @@
 .side[data-tone="amber"] .btn--ghost{background:transparent;border-color:rgba(23,24,26,.22)}
 .side[data-tone="amber"] .btn--ghost:hover{background:var(--bg);border-color:rgba(23,24,26,.28)}
 
-/* Toggle state has to be visible, not only announced through aria-pressed.
-   On yellow it becomes a solid white chip with an ink edge — the dark
-   treatment is reserved for the one link that leaves the app. */
-.side__toggles .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--ink)}
-.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"],
-.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]:hover{background:var(--bg);border-color:var(--ink);color:var(--ink)}
-
-/* Install control: initPWA fills this slot only when installing is possible,
-   so the slot collapses while it holds nothing visible. */
-.side__pwa:empty{display:none}
-.side__pwa:not(:has(.pwa-install:not([hidden]))){display:none}
+/* The two brand-row controls carry no text, so their pressed state has to be
+   visible and not only announced through aria-pressed. On yellow the pressed
+   one becomes a solid white chip with an ink edge — the dark treatment is
+   reserved for the one link that leaves the app. */
+.side__brandbtns .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--ink)}
+.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"],
+.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:var(--bg);border-color:var(--ink);color:var(--ink)}
 
 /* The author's site — the single dark control in the sidebar, so it reads as
    an exit whichever colour the sidebar is wearing. */
@@ -156,7 +152,7 @@
   .aging__row{grid-template-columns:88px minmax(0,1fr) 96px}
   .aging__row>:last-child{display:none}
   /* the sidebar is a drawer down here, so there is nothing to collapse */
-  .side__toggles [data-chrome="rail"]{display:none}
+  .side__brandbtns [data-chrome="rail"]{display:none}
 }
 @media (max-width:640px){
   .filterbar{gap:10px}
