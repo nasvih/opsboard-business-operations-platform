@@ -15,6 +15,21 @@ The source is published so it can be read, run and evaluated. It is not open sou
 
 ---
 
+## Tech stack
+
+- **Plain HTML, CSS and ES modules.** No dependencies, no build step, no framework, no bundler —
+  the files you read are the files the browser runs.
+- **`localStorage` for state.** One key holds the demo records, another holds the interface
+  settings. There is no server and no network call anywhere in the app.
+- **Inline stroke SVG icons**, drawn in the source with `currentColor` — no icon font, no sprite.
+- **Inter and JetBrains Mono from Google Fonts** — the only request that leaves the page.
+- **Service worker + web manifest** for offline use and installing it as an app.
+- **A simulated assistant engine**: local intent matching over this app's own data, with actions
+  that write back to the store. No model, no API, no network.
+
+It deploys as static files anywhere — Vercel, GitHub Pages, S3, nginx, or a folder served by
+`python3 -m http.server`.
+
 ## What this is
 
 Opsboard is the operations core of a business: one workspace holding its customers, its deal
@@ -50,8 +65,8 @@ Nothing is sent to a server, there is no account and no backend. Clear your brow
 app's own demo data. It is a demonstration of the interaction, not a connected AI model, and no
 request leaves your browser.
 
-The same four blocks are in the app itself, behind the `DEMO` pill in the topbar and the
-"About this demo" button in the sidebar footer.
+The same blocks are in the app itself, behind the **About this demo** button in the topbar — along
+with a worked example of every change the copilot can make for you.
 
 ---
 
@@ -85,6 +100,7 @@ Every one of these writes to `localStorage` and survives a reload:
 5. Create a customer or a deal.
 6. Invite someone, change a role, remove access, or tick a permission in the role matrix.
 7. Rename a workspace, change plan, seats or reporting currency.
+8. Ask the copilot to do any of the first six for you — it proposes the change, you confirm it.
 
 **Reset demo data** in the sidebar footer (and in Settings) rebuilds all three workspaces from the
 seed and throws away every edit.
@@ -103,10 +119,24 @@ sidebar* / *Expand sidebar*). That is a desktop control: below 900px the sidebar
 drawer behind the menu button, so it is hidden there. In the rail the brand row stacks and both
 controls stay reachable.
 
-The footer holds **About this demo** across the top, then [nasvih.in](https://www.nasvih.in)
-beside a **Source on GitHub** link to this repository — both open in a new tab — and then
-**Reset demo data**. When the browser offers an install, an **Install app** button appears next
-to Reset on that last row; until then Reset has the row to itself.
+The footer holds two rows: [nasvih.in](https://www.nasvih.in) beside a **GitHub** link to this
+repository — both open in a new tab — and then **Reset demo data**. When the browser offers an
+install, an **Install app** button appears next to Reset on that last row; until then Reset has the
+row to itself. *About this demo* lives in the topbar, not here.
+
+### The topbar
+
+Right of the page title sit three icon-only controls and the demo notice. Each has a `title` and an
+`aria-label`, each is reachable from the keyboard, and each remembers its state in this browser.
+
+| Control | What it does |
+|---|---|
+| **Notifications** (bell) | A panel built from this workspace's own records: invoices past due, deals reaching their close date inside a week or already past it, a plan running out of seats, and what the team changed in the last three days. The badge counts the unread ones. Mark one read, or all of them; clicking an item marks it read and opens the screen it belongs to. Read marks persist. Switch workspace and the list re-scopes with everything else. |
+| **Device preview** (phone / desktop) | Phone mode renders the app inside a 390 × 844 iframe of itself, in a dark bezel on a yellow surround, with the app's name above it and a **Back to desktop** control. It is an iframe rather than a scaled picture, so the real breakpoints apply. The framed copy hides the device switch and does not register the service worker a second time. `Esc` returns to the desktop. The control is hidden below 900px — you are already there. |
+| **Dark mode** (moon / sun) | Sets `data-theme="dark"` on the page and remembers it. On a first visit it follows the operating system. The brand yellow does not change between schemes: it stays a fill with ink text on it. |
+
+**About this demo** — the amber button at the far right — opens the About modal, which includes
+worked examples of everything the copilot can change.
 
 ### Opsboard Copilot
 
@@ -116,6 +146,26 @@ so the figures always match the screens, and they move when you change something
 revenue, overdue invoices, deal ownership, at-risk accounts, seat usage, recent changes, pipeline by
 stage, top accounts, admin access, workspace comparison and individual account lookups. When it
 cannot match a question it says what it *can* answer instead.
+
+It also **does** things. Six actions are wired to the store. In every case it names the exact record
+it matched, shows what it understood, and changes nothing until you press the button; then it
+reports the before and after values and puts the screen the change landed on in front of you.
+
+| Say this | What happens |
+|---|---|
+| `Move the Marikkar Hardware deal to negotiation` | The card changes stage on the pipeline board; stage, probability and the open pipeline total are reported before → after. |
+| `Log a note on Vaduthala Steel Mart: they asked for 45 day terms` | The note goes to the top of that account's drawer under your name; the note count moves. |
+| `Mark NT-20260124 paid` | Status goes sent or overdue → paid, outstanding drops by the invoice amount, the aging bars redraw. |
+| `Flag Aluva Cement Depot as at risk` | The status pill changes and the account joins the at-risk list; the at-risk count is reported before → after. |
+| `Invite Priya Menon as an admin` | A pending invite appears on Team and roles and one more seat is used. Ownership is refused — that is not a chat-box decision. |
+| `New deal for Marikkar Hardware, 4 lakh, proposal stage` | A new card in Proposal worth ₹4,00,000, owned by the account owner, closing in 30 days. |
+
+Values can be written any way you like — `4 lakh`, `₹400000`, `250k`, `2.5 crore`. Ask
+**What can you do?** and it lists the six with an example each, filled in with names from the
+workspace you have open.
+
+If the reference is ambiguous — an account with two open deals, a name that matches two accounts,
+an invoice number that does not exist — it stops, says so, lists the candidates and changes nothing.
 
 ---
 
@@ -175,12 +225,13 @@ without any configuration.
 | `lib/pwa.js` | Registers the service worker and drives the "Install app" control, including the iOS instructions. Unmodified. |
 | `assets/icons/*.png` | App icons: 192, 512 and a maskable 512. |
 | `assets/app.css` | Shared design system: tokens, shell, buttons, tables, forms, modal, assistant. Unmodified. |
-| `assets/opsboard.css` | App-specific components only: workspace switcher, filter bar, pipeline board, aging rows, role matrix, plan picker. |
+| `assets/opsboard.css` | App-specific components only: workspace switcher, filter bar, pipeline board, aging rows, role matrix, plan picker, notification panel, phone preview, and the dark-mode corrections for anything sitting on the brand yellow. |
 | `lib/ui.js` | DOM helpers, formatting, seeded random, `localStorage` store, hash router, toast, modal, CSV export, bar chart, icons. |
 | `lib/assistant.js` | The offline assistant engine: intent routing, word-by-word streaming, tables and traces. |
-| `src/main.js` | Boot: builds the shell, workspace switcher, navigation, router, keyboard shortcuts, mounts the copilot. |
+| `src/main.js` | Boot: builds the shell, workspace switcher, navigation, topbar controls (notifications, device preview, dark mode), router, keyboard shortcuts, mounts the copilot. |
 | `src/data.js` | Seeded demo dataset for all three workspaces, plus selectors and mutations. |
-| `src/agent.js` | Opsboard Copilot: twelve intents and four fallbacks, all reading live store state. |
+| `src/agent.js` | Opsboard Copilot: six action intents plus thirteen read-only intents and four fallbacks, all reading live store state. |
+| `src/notify.js` | Builds the notification list from the live workspace: overdue invoices, deals closing, seat pressure, recent changes. |
 | `src/parts.js` | Small shared view parts: stat cards, status pills, filters, drawer, definition lists. |
 | `src/views/*.js` | One module per screen, each exporting `render(ctx)` and returning a DOM node. |
 
@@ -203,7 +254,7 @@ without any configuration.
 | `⌘K` / `Ctrl+K` | Open or close the Opsboard Copilot |
 | `Alt` + `1`–`7` | Jump to Overview, Customers, Deals, Invoices, Reports, Team, Settings |
 | `/` | Focus the search box on the current screen |
-| `Esc` | Close the assistant, a modal, a drawer or the mobile navigation |
+| `Esc` | Close the assistant, a modal, a drawer, the notification panel, the phone preview or the mobile navigation |
 | `Tab` | Move through every control; focus is always visible |
 
 ## Licence

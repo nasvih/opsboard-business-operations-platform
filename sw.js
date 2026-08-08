@@ -3,7 +3,7 @@
    network), and a single versioned cache so an update wipes the old one.
    Bump CACHE_VERSION whenever the file list or any cached asset changes. */
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v4';
 const CACHE = `${self.registration.scope}::${CACHE_VERSION}`;
 
 /* Opsboard's own shell: every file the app needs to start with no network.
@@ -22,6 +22,7 @@ const SHELL = [
   './src/data.js',
   './src/agent.js',
   './src/parts.js',
+  './src/notify.js',
   './src/views/overview.js',
   './src/views/customers.js',
   './src/views/deals.js',

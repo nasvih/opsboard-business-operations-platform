@@ -7,9 +7,12 @@ How the app is put together, what the data looks like, and how to add to it.
 ## 0. What this is and how the demo works
 
 The `ABOUT` constant in `src/main.js` holds four blocks, rendered by `aboutModal()` and opened from
-two places: the `DEMO` pill in the topbar and the "About this demo" button in the sidebar footer.
-Each block is `{ title, text }` or `{ title, list }` — a paragraph or a bulleted list, styled by
-`.about__block` / `.about__list` in `assets/opsboard.css`.
+the **About this demo** button in the topbar. Each block is `{ title, text }` or `{ title, list }` —
+a paragraph or a bulleted list, styled by `.about__block` / `.about__list` in
+`assets/opsboard.css`. `aboutModal()` then appends a fifth block built at open time by
+`aboutExamples()`: six "say this → this happens" pairs for the copilot's actions, using names read
+from the workspace that is actually open, so they can be copied into the copilot and will work as
+written.
 
 **1. What this is.** Opsboard is the operations core of a business: one workspace holding its
 customers, its deal pipeline, its invoices, its team and their roles, and the reports built from all
@@ -177,8 +180,9 @@ reason is returned as a string so the UI and the assistant can both explain *why
 | `sw.js` | — | Service worker at the app root, so its scope covers the whole app. Owns the `SHELL` file list and `CACHE_VERSION`. |
 | `src/data.js` | `store, seedState, resetDemo, STORE_KEY, STAGES, SEGMENTS, CUSTOMER_STATUS, INVOICE_STATUS, ROLES, PERMISSIONS, PLANS, CURRENCIES, WORKSPACE_IDS`, all selectors, `setWorkspace`, `logActivity` | The only module that writes records. |
 | `src/parts.js` | `wsMoney, iconEl, statusPill, pageHead, statCard, emptyState, searchBox, selectFilter, openDrawer, defList, sectionTitle` | View fragments shared by two or more screens. |
-| `src/agent.js` | `createCopilot, copilotIntents` | Intent pack; imports selectors, never the views. |
-| `src/main.js` | — | Entry point. Owns the shell, the nav table, the router and the shortcuts. |
+| `src/agent.js` | `createCopilot({ show }), copilotIntents` | Intent pack, read intents and action intents; imports selectors, never the views. `show(screenId)` is handed in by `main.js` so an applied action can bring its screen forward. |
+| `src/notify.js` | `buildNotifications(ws), notifWhen(n)` | Derives the notification list from a workspace. Pure: no state, no storage, recomputed on every paint. |
+| `src/main.js` | — | Entry point. Owns the shell, the nav table, the router, the shortcuts, and the three topbar controls (notifications, device preview, colour scheme). |
 | `src/views/overview.js` | `render` | |
 | `src/views/customers.js` | `render` | Owns the customer drawer and the create modal. |
 | `src/views/deals.js` | `render` | Board and flat list share one stage-select component. |
@@ -203,6 +207,43 @@ reads correctly; the numbers were computed before the first word appeared.
 `src/agent.js` passes `context: () => ({ ws: activeWorkspace(), state: store.state, … })`, evaluated
 per question, which is why answers change the moment you edit something or switch workspace.
 
+### Actions
+
+An answer may also carry `actions: [{ label, doingLabel?, run() }]`. The engine renders them as a
+button row under the message; `run()` is only called when the reader presses one. It mutates the
+store and returns `{ text, table?, meta?, suggestions?, actions? }`, which is appended to the log as
+the agent's next reply. Nothing is written before the press — the first answer is a proposal.
+
+Each action in this app follows the same four rules:
+
+1. **Name the record.** The proposal quotes the exact deal, account, invoice or person, with the
+   values that identify it (stage, owner, amount, due date).
+2. **Refuse when the reference is not good enough.** `resolveCustomer` scores every account name
+   against the sentence and returns `ambiguous` when the top two tie; `resolveDeal` returns
+   `many-deals` when an account has more than one open deal; `resolveInvoice` returns
+   `many-invoices` or `no-number`. Each of those paths lists the candidates and changes nothing.
+3. **Report before → after.** Every `apply*` function captures the affected totals *before*
+   `store.update`, then returns a three-column table: field, before, after.
+4. **Show the change.** `showScreen(id)` — passed in from `main.js` — routes to the screen the
+   change landed on, so the reader sees it behind the panel.
+
+| id | Sentence it handles | Writes |
+|---|---|---|
+| `act-move-deal` | "move the Marikkar Hardware deal to negotiation" | `deal.stage`, `probability`, `updatedAt`, activity entry |
+| `act-note` | "log a note on Vaduthala Steel Mart: they asked for 45 day terms" | `customer.notes[0]`, activity entry |
+| `act-invoice-paid` | "mark NT-20260124 paid", "mark the oldest overdue invoice paid" | `invoice.status`, `paidAt` (a draft is offered an issue action instead) |
+| `act-customer-status` | "flag Aluva Cement Depot as at risk", "move it to Wholesale" | `customer.status` and/or `customer.segment` |
+| `act-invite` | "invite Priya Menon as an admin" | a new `member` with `status: 'invited'`; owner is refused, duplicate emails are refused |
+| `act-new-deal` | "new deal for Marikkar Hardware, 4 lakh, proposal stage" | a new `deal` at 40% closing in 30 days |
+
+Sentence parsing lives in the same module: `parseStage`, `parseStatus`, `parseSegment`, `parseRole`,
+`parsePerson`, `parseNoteText` and `parseAmount` — the last understands `4 lakh`, `2.5 crore`,
+`250k`, `₹4,00,000` and bare numbers of four digits or more.
+
+Action intents are listed **first** in the `intents` array and carry enough patterns to outscore the
+read-only intents that share their vocabulary ("paid" against `overdue`, "at risk" against `atrisk`,
+"invite" against `access`). `_route` keeps the first intent on a tie, so order settles the rest.
+
 ### Intents
 
 | id | Answers |
@@ -218,7 +259,7 @@ per question, which is why answers change the moment you edit something or switc
 | `access` | Who holds owner or admin, what admins and members can do, stale sign-ins |
 | `workspaces` | All three tenants side by side — accounts, pipeline, overdue |
 | `account` | Full profile for a named account: contact, terms, invoices, deals |
-| `help` | What it can be asked |
+| `help` | The six actions with a worked example each, filled in with live record names, then everything it can answer |
 
 Four fallbacks rotate when nothing scores, each naming a question it *can* answer.
 
@@ -274,14 +315,18 @@ library, no canvas. `meter(value, max, kind)` gives a single bar with `''`, `'ok
 
 ---
 
-## 6. Sidebar chrome
+## 6. Interface chrome
 
-Two independent preferences live under one `localStorage` key, `opsboard.chrome.v1`, holding
-`{ rail, tone }`:
+Every interface preference lives under one `localStorage` key, `opsboard.chrome.v1`, holding
+`{ rail, tone, theme, read }`:
 
 ```js
-const CHROME_DEFAULT = { rail: false, tone: true };   // yellow navigation by default
+const CHROME_DEFAULT = { rail: false, tone: true, theme: null, read: [] };
 ```
+
+`rail` and `tone` are the sidebar; `theme` is the colour scheme (`null` means follow the operating
+system); `read` is the list of notification ids already seen, capped at 400 so it cannot grow
+without bound. The key is read once at boot and written by `saveChrome()` after any change.
 
 `tone` drives `data-tone="amber"` on `<aside class="side">`; `rail` drives `.is-rail` on the shell
 and only applies above 900px, since below that the sidebar is already a drawer. The read is
@@ -320,12 +365,12 @@ edited by hand, and every value is an existing token:
 |---|---|
 | `.wsw__label` and `.side__note` are this app's labels and used `--amber-darker` too | `--ink-2` on the amber sidebar only |
 | The skip link is an amber fill and lands on top of the sidebar, so it vanished into it | 2px ink border plus an ink focus ring |
-| `.btn--ghost` ("About this demo") inherited the solid footer button style and lost its rank | transparent with an ink hairline on yellow, white on hover |
+| `.btn--ghost` inherited the solid footer button style on yellow and lost its rank | transparent with an ink hairline on yellow, white on hover |
 | `aria-pressed` on the two brand-row controls had no visible counterpart | pressed = `--amber-soft` with an amber edge on white, a solid white chip with an ink edge on yellow |
 
 Ink text on `#EAC81C` is 10.9:1. Nothing renders white text on yellow anywhere. The one inverted
 element in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground, white text,
-`--night-2` on hover). The **Source on GitHub** link next to it is a plain outline control, so the
+`--night-2` on hover). The **GitHub** link next to it is a plain outline control, so the
 dark treatment stays unique. Both are built by `outLink(url, label, icon, cls)` in `src/main.js`,
 which sets `target="_blank"`, `rel="noopener noreferrer"`, a `title` and an `aria-label` ending in
 "opens in a new tab"; in rail mode both collapse to their icon like the other footer controls,
@@ -341,6 +386,54 @@ other icon; no icon font and no emoji.
 be read, run and evaluated, not open source, and copying, modifying, redistributing, deploying or
 training on it needs written permission. If the licence changes, change `SOURCE_NOTE`, `LICENSE` and
 the Licence section of `README.md` together.
+
+### Colour scheme
+
+`applyTheme()` is the single writer: it sets `data-theme="dark"` or `data-theme="light"` on
+`<html>`, rewrites the button's glyph, `aria-pressed`, `title` and `aria-label`, and updates the
+`theme-color` meta. A first visit reads `prefers-color-scheme` through a `matchMedia` list that is
+also listened to, so a system change is followed until the reader makes an explicit choice.
+
+A five-line inline script in `index.html` sets the attribute before the stylesheets paint, so a dark
+session never flashes white. It reads the same key and duplicates nothing else.
+
+The dark palette itself is in `app.css` under `[data-theme="dark"]`. What `assets/opsboard.css` adds
+is the set of corrections for **things sitting on the brand yellow**, which does not change between
+schemes: `--on-amber` stays `#17181A`, so the sidebar's text, marks, chips and hover states are
+pinned back to it rather than following the themed `--ink`, which is now near-white. The same block
+darkens the shared `<select>` chevron and puts dark text on the solid `--ok` / `--bad` toast and
+badge fills.
+
+### Notifications
+
+`src/notify.js` derives the list; it stores nothing. Four sources, each with a stable id so a read
+mark survives a reload:
+
+| id shape | Source |
+|---|---|
+| `inv:<invoiceId>` / `inv-more:<ws>:<n>` | The three oldest overdue invoices, then one summary row for the rest |
+| `deal:<dealId>` | Open deals whose close date is inside seven days or already past |
+| `seats:<ws>:<used>/<total>` | Only when the plan is 80% used or over |
+| `act:<activityId>` | The four newest activity entries from the last three days |
+
+Ids are workspace-scoped because the record ids are, so switching workspace re-scopes the list and
+the badge without touching the read marks of the others. `paintChrome()` repaints the badge and, if
+it is open, the panel — and `store.subscribe` calls `paintChrome`, so any write anywhere in the app
+updates the bell. Every row carries a word as well as a colour (`Overdue`, `Closing`, `Slipping`,
+`Seats`, `Change`) and the screen it belongs to; clicking it marks it read and routes there.
+
+### Device preview
+
+The phone control appends a `.stage` overlay: a yellow surround, the app name, a **Back to desktop**
+button, and an `<iframe src="./index.html?frame=phone#/<current screen>">` at 390 × 844 inside a dark
+bezel. It is a real iframe, not a transform of the desktop layout, so the app's own media queries
+decide what it looks like. `fitPhone()` scales the bezel down on short viewports and is re-run on
+resize; `Esc` closes.
+
+The framed copy reads `FRAMED` from `location.search` and does two things differently: it leaves the
+device switch out of the topbar, and it skips `initPWA` entirely, so the service worker is registered
+once by the outer page and the install prompt is never offered twice. Below 900px the control is
+hidden in CSS.
 
 ---
 
@@ -405,7 +498,7 @@ breaking the page — so the app keeps working online and silently stops working
 | ≥ 1080px | Sidebar pinned, four stat columns, five pipeline columns, side-by-side cards |
 | 900–1080px | Four-up stats collapse to two-up; the side rail drops under the main column |
 | < 900px | Sidebar becomes a slide-over behind the menu button; tapping the content or pressing `Esc` closes it; three-up grids become two-up |
-| ≤ 640px | Everything becomes a single column, the pipeline board stacks, tables scroll inside their own container, the assistant goes full screen |
+| ≤ 640px | Everything becomes a single column, page headings stack above their action buttons, the search box takes its own line, the pipeline board stacks, tables scroll inside their own container, the notification panel becomes a fixed sheet under the topbar, the assistant goes full screen |
 
 Verified down to 390px with no horizontal page scroll.
 
@@ -426,7 +519,7 @@ only and introduces no new colours.
 | `--amber` / `--amber-fill` | `#EAC81C` | Brand fill — buttons, bars, active states, the launcher |
 | `--on-amber` | `#17181A` | Text on any amber fill |
 | `--amber-deep` | `#8A6D00` | Amber-family text on white, where the fill colour would fail contrast |
-| `--amber-soft` / `--amber-line` | `#FEF9DA` / `#F0DE8C` | Active nav, selected plan, demo pill |
+| `--amber-soft` / `--amber-line` | `#FEF9DA` / `#F0DE8C` | Active nav, selected plan, About button, unread notification |
 | `--ok` / `--warn` / `--bad` / `--info` | `#1E7A4B` / `#9A6400` / `#B3261E` / `#1F5C9E` | Status, each with a `-soft` ground and `-line` border |
 | `--r-lg` / `--r` / `--r-sm` / `--r-xs` | `12` / `8` / `6` / `4` px | Radius scale |
 | `--sans` | Inter | Interface text |
@@ -434,6 +527,12 @@ only and introduces no new colours.
 | `--sidebar` / `--bar` / `--gutter` | `248` / `60` / `20` px | Shell metrics |
 
 | `--night` / `--night-2` | `#17181A` / `#222427` | The single dark control: the `nasvih.in` link ground and its hover |
+
+`app.css` also carries a `[data-theme="dark"]` block that redefines the ground, ink, hairline and
+status tokens. `--amber-fill` and `--on-amber` are deliberately **not** redefined: the brand yellow
+is the same colour in both schemes and always carries ink text. `assets/opsboard.css` adds no new
+colours in dark either, with one exception — `#FFFFFF` for the chips that sit on the yellow sidebar,
+where the light theme used `--bg` and the dark value would have been near-black under ink text.
 
 Rules the app holds to: solid fills only — no gradient, no blur, no glow shadow, no emoji as an
 icon. Yellow is always a *fill* with ink text on it, never yellow text on white and never white text
@@ -467,7 +566,15 @@ For the installable side, in the browser:
 4. **Sidebar** — a fresh profile shows the yellow sidebar with `aria-pressed="true"` on the
    *Sidebar colour* control in the brand row; switching it off, reloading, switching it back and
    reloading again both persist, as does the rail.
-5. **390px** — every screen with no horizontal page scroll.
+5. **390px** — every screen with no horizontal page scroll, in both colour schemes.
+6. **Notifications** — the badge counts unread, marking one or all read updates it, and the marks
+   survive a reload; switching workspace re-scopes the list.
+7. **Phone preview** — the frame loads the app, the framed copy has no device switch of its own,
+   and *Back to desktop* or `Esc` returns.
+8. **Dark mode** — toggling sets `data-theme` and persists; a fresh profile follows the operating
+   system; the yellow sidebar keeps ink text in both schemes.
+9. **Copilot actions** — each of the six proposes before it writes, refuses an ambiguous reference,
+   reports before → after, and the change is on the screen behind the panel and survives a reload.
 
 Last verified: manifest parses with three icons, all 22 `SHELL` paths return 200, the worker
 activates and controls the page after one reload, an offline reload with the server stopped renders

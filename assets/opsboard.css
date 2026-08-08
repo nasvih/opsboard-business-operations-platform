@@ -4,6 +4,7 @@
    no gradients, no blur, no shadows beyond the shared ones.
    1 shell extras · 2 workspace switcher · 3 filters · 4 lists
    5 pipeline board · 6 aging · 7 role matrix · 8 plans · 9 responsive
+   10 topbar controls · 11 notifications · 12 phone preview · 13 dark mode
    ============================================================ */
 
 /* == 1. shell extras == */
@@ -29,6 +30,12 @@
   border-radius:var(--r-xs);background:var(--amber-fill)}
 .about__source{margin-top:12px}
 .about__source p{font-size:13px;margin-bottom:10px}
+/* the copilot's worked examples: what you type, then what it does */
+.about__ex{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.about__ex li{display:flex;flex-direction:column;gap:3px;border-left:3px solid var(--amber);
+  padding:2px 0 2px 11px}
+.about__say{font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.about__does{font-size:13px;line-height:1.45}
 
 /* Rail mode and the yellow tone come from app.css. Below are the pieces the
    shared kit does not know about — this app's workspace switcher, the footer
@@ -158,9 +165,125 @@
   .filterbar{gap:10px}
   .filterbox{min-width:0;flex:1}
   .search{max-width:none;width:100%}
+  /* the head is a row of title plus actions; at this width the title has no
+     room left beside two buttons, so the two parts stack instead */
+  .page-head{flex-direction:column;gap:12px}
+  .page-head .btnrow{width:100%}
+  .page-head .btnrow>*{flex:1}
+  /* and the search box takes its own line above the selects */
+  .filterbar .search{flex:1 0 100%}
   .kboard{grid-template-columns:minmax(0,1fr);overflow-x:visible}
   .kcol{min-width:0}
   .deflist{grid-template-columns:minmax(0,1fr);gap:2px 0}
   .deflist dd{margin-bottom:8px}
   .aging__row{grid-template-columns:76px minmax(0,1fr) 86px}
 }
+
+/* == 10. topbar controls ==
+   Three icon-only controls sit between the page title and the demo notice:
+   notifications, device preview, colour scheme. Nothing here is labelled by
+   colour alone — each carries a title and an aria-label, and the pressed
+   state is drawn as well as announced. */
+.topbar__tools{display:flex;align-items:center;gap:4px;flex:none}
+.devswitch{display:flex;gap:2px}
+.topbar__tools .btn--icon[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
+.topbar__title,.topbar__sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pill--btn{white-space:nowrap}
+
+/* == 11. notifications == */
+.notif{position:relative;flex:none}
+.bellbtn{position:relative}
+.bellbadge{position:absolute;top:-3px;right:-3px;min-width:17px;height:17px;padding:0 4px;
+  border-radius:var(--r-pill);background:var(--bad);color:#fff;font-size:10px;font-weight:600;
+  display:grid;place-items:center;line-height:1;border:1px solid var(--surface)}
+.notifpanel{position:absolute;right:0;top:calc(100% + 10px);z-index:40;
+  width:min(380px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);
+  border-radius:var(--r-lg);box-shadow:var(--shadow-3);max-height:min(70vh,540px);overflow:auto;padding:0 6px 6px}
+.notifpanel__head{display:flex;align-items:center;gap:10px;padding:12px 8px 10px;
+  border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface);z-index:1}
+.notifpanel__head h3{font-size:14.5px}
+.notifpanel__foot{padding:10px 8px 4px;border-top:1px solid var(--line);margin-top:4px}
+.notifempty{padding:24px 14px;text-align:center}
+.notifempty h4{margin-bottom:6px}
+.notiflist{display:flex;flex-direction:column;padding:4px 0}
+.notifitem{display:flex;align-items:stretch;gap:2px;border-radius:var(--r);padding:1px}
+.notifitem+.notifitem{margin-top:3px}
+.notifitem.is-unread{background:var(--amber-soft)}
+.notifitem:hover{background:var(--hover)}
+.notifitem__go{flex:1;min-width:0;text-align:left;background:none;border:0;cursor:pointer;
+  padding:9px 8px;border-radius:var(--r-sm);font:inherit;color:inherit}
+.notifitem__top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px}
+.notifitem__title{font-weight:600;font-size:13.5px;line-height:1.4}
+.notifitem__go p{margin-top:3px}
+.notifitem__read{flex:none;align-self:center;padding:5px;width:28px;height:28px}
+.notifitem__seen{flex:none;align-self:center;padding-right:8px;font-size:9.5px}
+
+/* == 12. phone preview ==
+   The app inside an iframe of itself at 390x844, so its own breakpoints do
+   the work. Yellow surround, ink text on it, dark bezel around the screen. */
+.stage{position:fixed;inset:0;z-index:90;background:var(--amber-fill);color:var(--on-amber);
+  display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;overflow:auto}
+.stage__bar{display:flex;align-items:center;gap:16px;width:min(760px,100%);justify-content:space-between;flex:none}
+.stage__name{font-weight:700;font-size:17px;letter-spacing:-.02em}
+.stage__size{color:var(--on-amber)}
+.stage :focus-visible{outline-color:var(--ink)}
+.phone{position:relative;flex:none;background:var(--night);border-radius:38px;padding:12px;
+  transform-origin:top center}
+.phone__notch{position:absolute;left:50%;margin-left:-48px;top:4px;width:96px;height:5px;
+  border-radius:var(--r-pill);background:var(--night-line)}
+.phone__screen{width:390px;height:844px;border:0;border-radius:26px;background:var(--bg);display:block}
+body.is-staged{overflow:hidden}
+body.is-staged .assist-fab,body.is-staged .assist,body.is-staged .toasts{display:none}
+
+@media (max-width:900px){
+  /* the phone preview is a desktop idea — at this width you are already there */
+  .devswitch{display:none}
+}
+@media (max-width:640px){
+  .topbar{gap:8px;padding:0 12px}
+  .notifpanel{position:fixed;left:12px;right:12px;top:calc(var(--bar) + 8px);width:auto;
+    max-height:calc(100vh - var(--bar) - 20px)}
+}
+
+/* == 13. dark mode ==
+   The palette flips in app.css. What is left here is everything this app
+   paints on the brand yellow: the yellow does not change between schemes, so
+   anything sitting on it keeps ink text rather than the themed --ink. */
+html[data-theme="dark"]{color-scheme:dark}
+
+/* the shared select chevron is drawn with a light-mode grey */
+[data-theme="dark"] .select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23A2A8B0' stroke-width='1.7'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E")}
+
+/* text on the yellow sidebar */
+[data-theme="dark"] .side[data-tone="amber"] .side__name,
+[data-theme="dark"] .side[data-tone="amber"] .side__tag,
+[data-theme="dark"] .side[data-tone="amber"] .navgroup__label,
+[data-theme="dark"] .side[data-tone="amber"] .navlink,
+[data-theme="dark"] .side[data-tone="amber"] .navlink svg,
+[data-theme="dark"] .side[data-tone="amber"] .navlink__count,
+[data-theme="dark"] .side[data-tone="amber"] .wsw__label,
+[data-theme="dark"] .side[data-tone="amber"] .wsw__name,
+[data-theme="dark"] .side[data-tone="amber"] .wsw__sub,
+[data-theme="dark"] .side[data-tone="amber"] .side__note,
+[data-theme="dark"] .side[data-tone="amber"] .wsw__btn,
+[data-theme="dark"] .side[data-tone="amber"] .btn{color:var(--on-amber)}
+/* the selected screen stays an inverted chip, so its text goes back to light */
+[data-theme="dark"] .side[data-tone="amber"] .navlink.is-active{color:var(--ink)}
+[data-theme="dark"] .side[data-tone="amber"] .navlink.is-active svg{color:var(--amber-deep)}
+/* white chips, not near-black ones, wherever the light theme used --bg */
+[data-theme="dark"] .side[data-tone="amber"] .btn:hover,
+[data-theme="dark"] .side[data-tone="amber"] .btn--ghost:hover,
+[data-theme="dark"] .side[data-tone="amber"] .wsw__btn:hover,
+[data-theme="dark"] .side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"],
+[data-theme="dark"] .side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:#FFFFFF;color:var(--on-amber)}
+/* the two ink-filled marks invert with the palette, which puts a pale block
+   on the yellow — pin them back to ink */
+[data-theme="dark"] .side[data-tone="amber"] .mark,
+[data-theme="dark"] .side[data-tone="amber"] .avatar--amber{background:var(--on-amber);color:var(--amber-fill)}
+/* the one dark control keeps its white text */
+[data-theme="dark"] .side[data-tone="amber"] .btn--site,
+[data-theme="dark"] .side[data-tone="amber"] .btn--site:hover{color:#fff}
+/* solid status fills carry dark text in this scheme */
+[data-theme="dark"] .toast--ok,[data-theme="dark"] .toast--bad,
+[data-theme="dark"] .bellbadge{color:var(--night)}
+[data-theme="dark"] .bellbadge{border-color:var(--surface)}

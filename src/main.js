@@ -10,6 +10,7 @@ import {
 import { createCopilot } from './agent.js';
 import { initPWA } from '../lib/pwa.js';
 import { iconEl } from './parts.js';
+import { buildNotifications, notifWhen } from './notify.js';
 
 import * as overview from './views/overview.js';
 import * as customers from './views/customers.js';
@@ -56,6 +57,28 @@ const TONE_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
   + '<circle cx="10" cy="10" r="6.6"/>'
   + '<path d="M10 3.4a6.6 6.6 0 0 1 0 13.2z" fill="currentColor" stroke="none"/></svg>';
 
+/* Topbar controls. Same 20x20 stroke style, all icon-only, all with a
+   title and an aria-label: a handset and a monitor for the device preview,
+   a moon and a sun for the colour scheme. */
+const DEVICE_ICON = {
+  phone: '<svg viewBox="0 0 20 20" aria-hidden="true">'
+    + '<rect x="5.75" y="2.25" width="8.5" height="15.5" rx="2"/><path d="M8.6 15.4h2.8"/></svg>',
+  desktop: '<svg viewBox="0 0 20 20" aria-hidden="true">'
+    + '<rect x="2.25" y="3.75" width="15.5" height="10" rx="2"/><path d="M7 17h6M10 13.75V17"/></svg>',
+};
+const THEME_ICON = {
+  moon: '<svg viewBox="0 0 20 20" aria-hidden="true">'
+    + '<path d="M16 11.6A6.4 6.4 0 0 1 8.4 4a6.6 6.6 0 1 0 7.6 7.6z"/></svg>',
+  sun: '<svg viewBox="0 0 20 20" aria-hidden="true">'
+    + '<circle cx="10" cy="10" r="3.6"/>'
+    + '<path d="M10 2.4v1.8M10 15.8v1.8M17.6 10h-1.8M4.2 10H2.4M15.4 4.6l-1.3 1.3M5.9 14.1l-1.3 1.3M15.4 15.4l-1.3-1.3M5.9 5.9L4.6 4.6"/></svg>',
+};
+
+/* The framed copy of the app, rendered inside the phone preview, is the same
+   page with one flag on it: no device toggle of its own, and no second
+   service worker registration or install prompt. */
+const FRAMED = new URLSearchParams(location.search).get('frame') === 'phone';
+
 /* The colour control never names a colour: the glyph carries it, and the
    accessible name stays neutral while aria-pressed reports the yellow tone. */
 const TONE_LABEL = 'Sidebar colour';
@@ -86,19 +109,23 @@ const CHROME_KEY = 'opsboard.chrome.v1';
 const DESKTOP = window.matchMedia('(min-width:901px)');
 
 /* Brand yellow is the default navigation. A stored preference always wins —
-   including an explicit `false`, which is how the plain white sidebar is kept. */
-const CHROME_DEFAULT = { rail: false, tone: true };
+   including an explicit `false`, which is how the plain white sidebar is kept.
+   `theme` is null until the reader chooses one, and null means "follow the
+   operating system". `read` holds the notification ids already seen. */
+const CHROME_DEFAULT = { rail: false, tone: true, theme: null, read: [] };
 
 const chrome = (() => {
   try {
     const raw = localStorage.getItem(CHROME_KEY);
-    if (!raw) return { ...CHROME_DEFAULT };
+    if (!raw) return { ...CHROME_DEFAULT, read: [] };
     const saved = JSON.parse(raw) || {};
     return {
       rail: saved.rail === true,
       tone: saved.tone === undefined ? CHROME_DEFAULT.tone : saved.tone === true,
+      theme: saved.theme === 'dark' || saved.theme === 'light' ? saved.theme : null,
+      read: Array.isArray(saved.read) ? saved.read.slice(-400) : [],
     };
-  } catch (_) { return { ...CHROME_DEFAULT }; }
+  } catch (_) { return { ...CHROME_DEFAULT, read: [] }; }
 })();
 
 function saveChrome() {
@@ -137,6 +164,231 @@ function setChrome(key, value) {
 
 DESKTOP.addEventListener('change', applyChrome);
 
+/* ---------- colour scheme ---------- */
+
+/* First visit follows the operating system; once the button is pressed the
+   choice is stored and the system is ignored. The yellow keeps ink text on it
+   in both schemes — that pairing is fixed, not themed. */
+const DARKQ = window.matchMedia('(prefers-color-scheme:dark)');
+const isDark = () => (chrome.theme ? chrome.theme === 'dark' : DARKQ.matches);
+
+function applyTheme() {
+  const dark = isDark();
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  const meta = qs('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#141517' : '#EAC81C');
+  const btn = qs('[data-tool="theme"]');
+  if (btn) {
+    const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    btn.setAttribute('aria-pressed', String(dark));
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.innerHTML = dark ? THEME_ICON.sun : THEME_ICON.moon;
+  }
+}
+
+DARKQ.addEventListener('change', () => { if (!chrome.theme) applyTheme(); });
+
+/* ---------- notifications ---------- */
+
+const readSet = () => new Set(chrome.read);
+
+function markRead(id) {
+  if (chrome.read.includes(id)) return;
+  chrome.read.push(id);
+  if (chrome.read.length > 400) chrome.read = chrome.read.slice(-400);
+  saveChrome();
+  paintBell();
+  paintNotifPanel();
+}
+
+function markAllRead() {
+  const ids = buildNotifications(activeWorkspace()).map((n) => n.id);
+  let added = 0;
+  ids.forEach((id) => { if (!chrome.read.includes(id)) { chrome.read.push(id); added += 1; } });
+  if (!added) return;
+  if (chrome.read.length > 400) chrome.read = chrome.read.slice(-400);
+  saveChrome();
+  paintBell();
+  paintNotifPanel();
+  toast(`${added} ${added === 1 ? 'notification' : 'notifications'} marked read`, 'ok');
+}
+
+function paintBell() {
+  const btn = qs('[data-tool="notify"]');
+  const badge = qs('[data-badge]');
+  if (!btn || !badge) return;
+  const read = readSet();
+  const count = buildNotifications(activeWorkspace()).filter((n) => !read.has(n.id)).length;
+  badge.textContent = count > 9 ? '9+' : String(count);
+  badge.hidden = count === 0;
+  const label = count
+    ? `Notifications, ${count} unread`
+    : 'Notifications, nothing unread';
+  btn.setAttribute('aria-label', label);
+  btn.title = label;
+}
+
+function paintNotifPanel() {
+  const panel = qs('.notifpanel');
+  if (!panel || panel.hidden) return;
+  const ws = activeWorkspace();
+  const items = buildNotifications(ws);
+  const read = readSet();
+  const unread = items.filter((n) => !read.has(n.id)).length;
+
+  panel.innerHTML = '';
+  panel.appendChild(h('header', { class: 'notifpanel__head' },
+    h('div', { style: 'min-width:0' },
+      h('h3', {}, 'Notifications'),
+      h('div', { class: 'label truncate' }, `${ws.name} · ${unread} unread`)),
+    unread
+      ? h('button', { class: 'btn btn--sm', onclick: markAllRead }, 'Mark all read')
+      : null));
+
+  if (!items.length) {
+    panel.appendChild(h('div', { class: 'notifempty' },
+      h('h4', {}, 'Nothing needs attention'),
+      h('p', { class: 'muted small' },
+        `No invoice in ${ws.name} is past due, no deal is closing this week and the plan still has seats. `
+        + 'Overdue money, deals reaching their close date, a full plan and anything the team changes all arrive here.')));
+    return;
+  }
+
+  const list = h('ul', { class: 'notiflist' });
+  items.forEach((n) => {
+    const seen = read.has(n.id);
+    list.appendChild(h('li', { class: `notifitem${seen ? '' : ' is-unread'}` },
+      h('button', {
+        class: 'notifitem__go', type: 'button',
+        'aria-label': `${n.title}. Open ${TITLES[n.nav] || n.nav}.`,
+        onclick: () => { markRead(n.id); toggleNotif(false); showScreen(n.nav); },
+      },
+      h('div', { class: 'notifitem__top' },
+        h('span', { class: `pill${n.kind ? ` pill--${n.kind}` : ''}` }, n.tag),
+        h('span', { class: 'faint small mono' }, notifWhen(n))),
+      h('div', { class: 'notifitem__title' }, n.title),
+      h('p', { class: 'muted small' }, n.line)),
+      seen
+        ? h('span', { class: 'notifitem__seen label' }, 'read')
+        : h('button', {
+          class: 'btn btn--sm btn--ghost notifitem__read', type: 'button',
+          title: 'Mark read', 'aria-label': `Mark "${n.title}" read`,
+          onclick: () => markRead(n.id),
+        }, iconEl('check'))));
+  });
+  panel.appendChild(list);
+  panel.appendChild(h('p', { class: 'notifpanel__foot small faint' },
+    'Built from this workspace as it stands. Read marks are kept in this browser.'));
+}
+
+function toggleNotif(force) {
+  const panel = qs('.notifpanel');
+  const btn = qs('[data-tool="notify"]');
+  if (!panel || !btn) return;
+  const open = force === undefined ? panel.hidden : force;
+  panel.hidden = !open;
+  btn.setAttribute('aria-expanded', String(open));
+  if (open) paintNotifPanel();
+}
+
+function notifControl() {
+  const badge = h('span', { class: 'bellbadge mono', dataset: { badge: '1' }, hidden: true, 'aria-hidden': 'true' });
+  const btn = h('button', {
+    class: 'btn btn--ghost btn--icon bellbtn', type: 'button', dataset: { tool: 'notify' },
+    'aria-haspopup': 'dialog', 'aria-expanded': 'false',
+    'aria-label': 'Notifications', title: 'Notifications',
+    onclick: (e) => { e.stopPropagation(); toggleNotif(); },
+  }, h('span', { html: icon('bell') }).firstChild, badge);
+  const panel = h('div', {
+    class: 'notifpanel', role: 'dialog', 'aria-label': 'Notifications', hidden: true,
+    onclick: (e) => e.stopPropagation(),
+  });
+  return h('div', { class: 'notif', dataset: { notif: '1' } }, btn, panel);
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest || !e.target.closest('[data-notif]')) toggleNotif(false);
+});
+
+/* ---------- device preview ---------- */
+
+/* Phone mode renders the app inside an iframe of itself at 390x844, so the
+   real breakpoints apply rather than a scaled-down picture of the desktop. */
+function setDeviceButtons(on) {
+  const p = qs('[data-device="phone"]');
+  const d = qs('[data-device="desktop"]');
+  if (p) p.setAttribute('aria-pressed', String(on));
+  if (d) d.setAttribute('aria-pressed', String(!on));
+}
+
+function fitPhone() {
+  const phone = qs('.phone');
+  if (!phone) return;
+  const room = window.innerHeight - 132;
+  const scale = Math.min(1, Math.max(0.42, room / 880));
+  phone.style.transform = `scale(${scale.toFixed(3)})`;
+  phone.style.marginBottom = `${Math.round(880 * (scale - 1))}px`;
+}
+
+function closeStage() {
+  const stage = qs('.stage');
+  if (!stage) return;
+  stage.remove();
+  document.body.classList.remove('is-staged');
+  document.removeEventListener('keydown', stageKey);
+  window.removeEventListener('resize', fitPhone);
+  setDeviceButtons(false);
+  const btn = qs('[data-device="phone"]');
+  if (btn) btn.focus();
+}
+
+function stageKey(e) { if (e.key === 'Escape') closeStage(); }
+
+function openStage() {
+  if (qs('.stage')) return;
+  const back = h('button', {
+    class: 'btn btn--dark', type: 'button', onclick: closeStage,
+  }, h('span', { html: DEVICE_ICON.desktop }).firstChild, h('span', {}, 'Back to desktop'));
+
+  const frame = h('iframe', {
+    class: 'phone__screen',
+    title: 'Opsboard at phone size',
+    src: `./index.html?frame=phone${location.hash || '#/overview'}`,
+    loading: 'eager',
+  });
+
+  const stage = h('div', { class: 'stage', role: 'dialog', 'aria-label': 'Phone preview' },
+    h('div', { class: 'stage__bar' },
+      h('div', { style: 'min-width:0' },
+        h('div', { class: 'stage__name' }, 'Opsboard'),
+        h('div', { class: 'stage__size label' }, '390 × 844 · the app running inside a frame')),
+      back),
+    h('div', { class: 'phone' }, h('div', { class: 'phone__notch' }), frame));
+
+  document.body.appendChild(stage);
+  document.body.classList.add('is-staged');
+  document.addEventListener('keydown', stageKey);
+  window.addEventListener('resize', fitPhone);
+  fitPhone();
+  setDeviceButtons(true);
+  back.focus();
+}
+
+function deviceControl() {
+  return h('div', { class: 'devswitch', role: 'group', 'aria-label': 'Preview size' },
+    h('button', {
+      class: 'btn btn--ghost btn--icon', type: 'button', dataset: { device: 'phone' },
+      'aria-pressed': 'false', 'aria-label': 'Preview at phone size', title: 'Preview at phone size',
+      onclick: openStage,
+    }, h('span', { html: DEVICE_ICON.phone }).firstChild),
+    h('button', {
+      class: 'btn btn--ghost btn--icon', type: 'button', dataset: { device: 'desktop' },
+      'aria-pressed': 'true', 'aria-label': 'Desktop view', title: 'Desktop view',
+      onclick: closeStage,
+    }, h('span', { html: DEVICE_ICON.desktop }).firstChild));
+}
+
 /* ---------- about this demo ---------- */
 
 const ABOUT = [
@@ -170,11 +422,32 @@ const ABOUT = [
         + 'invite someone — every flow runs and the other screens follow.',
       'Your data stays in this browser. Nothing is sent to a server, and "Reset demo data" clears it. '
         + 'It does not sync between browsers or devices.',
-      'The assistant is simulated. Opsboard Copilot reads this app\'s own demo data. It is a '
-        + 'demonstration of the interaction, not a connected model.',
+      'The assistant is simulated. Opsboard Copilot reads this app\'s own demo data, and can change it '
+        + 'when you ask. It is a demonstration of the interaction, not a connected model.',
+      'The topbar carries a bell for notifications built from these same records, a phone preview that '
+        + 'runs the app inside a 390-wide frame, and a dark mode. All three remember what you chose.',
     ],
   },
 ];
+
+/* Worked examples for the About modal: the sentence in, the change out. Names
+   are read from the workspace that is actually open, so they can be copied
+   into the copilot and will work as written. */
+function aboutExamples() {
+  const ws = activeWorkspace();
+  const account = (ws.customers[0] || { name: 'an account' }).name;
+  const deal = openDeals(ws)[0];
+  const dealAccount = deal ? (ws.customers.find((c) => c.id === deal.customerId) || { name: account }).name : account;
+  const late = overdueInvoices(ws)[0] || ws.invoices[0];
+  return [
+    [`Move the ${dealAccount} deal to negotiation`, 'the card changes stage on the pipeline board and the open pipeline total moves with it'],
+    [`Log a note on ${account}: they asked for 45 day terms`, 'the note appears at the top of that account\'s drawer, filed under your name'],
+    [late ? `Mark ${late.number} paid` : 'Mark the oldest overdue invoice paid', 'status becomes paid, outstanding drops by the invoice amount, the aging bars redraw'],
+    [`Flag ${account} as at risk`, 'the status pill changes and the account joins the at-risk list'],
+    ['Invite Priya Menon as an admin', 'a pending invite on the Team screen and one more seat used'],
+    [`New deal for ${account}, 4 lakh, proposal stage`, 'a new card in Proposal worth ₹4,00,000, owned by the account owner'],
+  ];
+}
 
 function aboutModal() {
   const body = h('div', { class: 'about' },
@@ -184,6 +457,15 @@ function aboutModal() {
       block.list
         ? h('ul', { class: 'about__list' }, block.list.map((line) => h('li', { class: 'muted' }, line)))
         : null)));
+
+  /* what to type, and what it does — the copilot's six actions */
+  body.appendChild(h('section', { class: 'about__block' },
+    h('h4', {}, 'What you can ask the copilot to do'),
+    h('p', { class: 'muted' }, 'It shows you the record it matched and waits for you to press the button. '
+      + 'Nothing is written until you do. Type any of these into the copilot, bottom right.'),
+    h('ul', { class: 'about__ex' }, aboutExamples().map(([say, does]) => h('li', {},
+      h('span', { class: 'about__say mono' }, say),
+      h('span', { class: 'about__does muted' }, does))))));
   /* sits under the fourth block, saying the same thing the LICENSE file does */
   body.appendChild(h('div', { class: 'about__source' },
     h('p', { class: 'muted' }, SOURCE_NOTE),
@@ -250,14 +532,11 @@ function buildShell() {
   });
   side.appendChild(navEl);
 
-  /* Footer, top to bottom: About on its own, then the two links, then install
-     and reset. The paired rows share their width and truncate rather than
-     overflow, and the kit stacks them back into a column in the rail. */
+  /* Footer, two rows: the two outward links, then install and reset. About
+     this demo lives in the topbar now, not here. The paired rows share their
+     width and truncate rather than overflow, and the kit stacks them back
+     into a column in the rail. */
   side.appendChild(h('div', { class: 'side__foot stack' },
-    h('button', {
-      class: 'btn btn--ghost btn--block', title: 'About this demo', 'aria-label': 'About this demo',
-      onclick: aboutModal,
-    }, iconEl('eye'), h('span', {}, 'About this demo')),
     /* the author's site — the one inverted control in the sidebar, so it reads
        as an exit from the demo whichever colour the sidebar is wearing. The
        repository link beside it stays an ordinary outline control. */
@@ -265,7 +544,7 @@ function buildShell() {
        control at, so Install and Reset match, and it keeps nasvih.in whole */
     h('div', { class: 'side__pair' },
       outLink('https://www.nasvih.in', 'nasvih.in', EXTERNAL_ICON, 'btn btn--block btn--sm btn--site'),
-      outLink(SOURCE_URL, 'Source on GitHub', CODE_ICON, 'btn btn--block btn--sm')),
+      outLink(SOURCE_URL, 'GitHub', CODE_ICON, 'btn btn--block btn--sm')),
     /* initPWA puts its control at the head of this row, and only when the
        browser actually offers an install; while it is absent or hidden the
        row holds one item and Reset takes the full width on its own */
@@ -297,12 +576,24 @@ function buildShell() {
       h('div', { class: 'topbar__title', dataset: { title: '1' } }, 'Overview'),
       h('div', { class: 'topbar__sub', dataset: { subtitle: '1' } }, '')),
     h('div', { class: 'spacer' }),
+    /* three icon-only controls, then the demo notice as a real button.
+       The framed copy inside the phone preview leaves the device switch out
+       so the preview cannot open a preview. */
+    h('div', { class: 'topbar__tools' },
+      FRAMED ? null : deviceControl(),
+      notifControl(),
+      h('button', {
+        class: 'btn btn--ghost btn--icon', type: 'button', dataset: { tool: 'theme' },
+        'aria-pressed': 'false', 'aria-label': 'Switch to dark mode', title: 'Switch to dark mode',
+        html: THEME_ICON.moon,
+        onclick: () => { chrome.theme = isDark() ? 'light' : 'dark'; saveChrome(); applyTheme(); },
+      })),
     h('button', {
       class: 'pill pill--amber pill--btn',
       title: 'Demo build: all records are generated locally and stored in this browser only. Open for details.',
       'aria-label': 'About this demo',
       onclick: aboutModal,
-    }, 'Demo'));
+    }, 'About this demo'));
   /* The copilot has exactly one entry point: the round launcher the assistant
      mounts bottom-right, plus its own Cmd/Ctrl+K shortcut. No topbar twin. */
 
@@ -408,6 +699,16 @@ function paintChrome() {
   if (s) s.textContent = ws.name;
   const sw = qs('[data-switcher]');
   if (sw && sw._paint) sw._paint();
+  paintBell();
+  paintNotifPanel();
+}
+
+/* Used by the copilot after it applies a change, and by a notification when
+   it is opened: put the screen the change landed on in front of the reader. */
+function showScreen(id) {
+  if (!TITLES[id]) return;
+  if (current === id) { paint(false); return; }
+  location.hash = `#/${id}`;
 }
 
 function paint(full) {
@@ -445,6 +746,7 @@ function paint(full) {
 
 buildShell();
 applyChrome();
+applyTheme();
 
 const routes = Object.fromEntries(NAV.map((n) => [n.id, n]));
 const r = router(routes, (name) => {
@@ -453,15 +755,18 @@ const r = router(routes, (name) => {
 });
 r.go();
 
-/* one launcher, bottom right, plus the Cmd/Ctrl+K the assistant binds itself */
-createCopilot().mount(document.body);
+/* one launcher, bottom right, plus the Cmd/Ctrl+K the assistant binds itself.
+   `show` is how an applied action brings its screen to the front. */
+createCopilot({ show: showScreen }).mount(document.body);
 
 /* installable: registers the service worker and, where the browser allows it,
    puts an "Install app" control in the sidebar footer. iOS has no prompt
    event, so the instructions arrive through the app's own toast. initPWA
    appends, so the control is moved to the head of the row it shares with
-   Reset — hidden it takes no space at all, so the row never gaps. */
-const installBtn = initPWA({
+   Reset — hidden it takes no space at all, so the row never gaps.
+   The framed copy inside the phone preview skips all of it: one page, one
+   service worker registration, one install prompt. */
+const installBtn = FRAMED ? null : initPWA({
   mount: qs('.side__pwa'),
   appName: 'Opsboard',
   onNote: (msg) => toast(msg, 'info'),
