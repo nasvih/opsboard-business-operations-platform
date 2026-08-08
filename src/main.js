@@ -170,7 +170,7 @@ DESKTOP.addEventListener('change', applyChrome);
    choice is stored and the system is ignored. The yellow keeps ink text on it
    in both schemes — that pairing is fixed, not themed. */
 const DARKQ = window.matchMedia('(prefers-color-scheme:dark)');
-const isDark = () => (chrome.theme ? chrome.theme === 'dark' : DARKQ.matches);
+const isDark = () => chrome.theme === 'dark';
 
 function applyTheme() {
   const dark = isDark();
