@@ -7,9 +7,12 @@
    ============================================================ */
 
 /* == 1. shell extras == */
+/* the skip link lands on top of the sidebar, which is yellow by default, so it
+   carries an ink edge and an ink focus ring instead of disappearing into it */
 .skiplink{position:absolute;left:-9999px;top:0;z-index:100;background:var(--amber-fill);color:var(--on-amber);
-  padding:10px 16px;border-radius:0 0 var(--r) 0;font-weight:600}
+  padding:10px 16px;border:2px solid var(--ink);border-radius:0 0 var(--r) 0;font-weight:600}
 .skiplink:focus{left:0}
+.skiplink:focus-visible{outline-color:var(--ink)}
 .viewhost{flex:1;min-width:0}
 /* fields laid out by a grid space themselves; drop the stacked margin */
 .grid>.field+.field{margin-top:0}
@@ -20,10 +23,15 @@
 .about__block+.about__block{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 .about__block h4{margin-bottom:5px}
 .about__block p{font-size:13.5px}
+.about__list{display:flex;flex-direction:column;gap:7px;margin-top:6px}
+.about__list li{position:relative;padding-left:15px;font-size:13.5px;line-height:1.5}
+.about__list li::before{content:"";position:absolute;left:0;top:8px;width:6px;height:6px;
+  border-radius:var(--r-xs);background:var(--amber-fill)}
 
-/* Rail mode and the yellow tone come from app.css. These are the two pieces
-   the shared kit does not know about: this app's workspace switcher and the
-   footer note. Colours are the kit's own values, nothing new is introduced. */
+/* Rail mode and the yellow tone come from app.css. Below are the pieces the
+   shared kit does not know about — this app's workspace switcher, the footer
+   note and the footer controls — plus the corrections the yellow sidebar needs
+   now that it is the default. Colours are the kit's own tokens throughout. */
 .shell.is-rail .wsw{padding:10px 8px}
 .shell.is-rail .wsw__label,
 .shell.is-rail .wsw__meta,
@@ -31,11 +39,39 @@
 .shell.is-rail .side__note{display:none}
 .shell.is-rail .wsw__btn{justify-content:center;padding:8px 0}
 .side[data-tone="amber"] .wsw{border-color:rgba(23,24,26,.16)}
-.side[data-tone="amber"] .wsw__label,
-.side[data-tone="amber"] .side__note{color:var(--amber-darker)}
 .side[data-tone="amber"] .wsw__btn{background:rgba(255,255,255,.72);border-color:rgba(23,24,26,.18);color:var(--ink)}
 .side[data-tone="amber"] .wsw__btn:hover{background:var(--bg);border-color:rgba(23,24,26,.28)}
 .side[data-tone="amber"] .avatar--amber{background:var(--ink);color:var(--amber-fill)}
+
+/* Secondary text: #6B5400 clears 4.4:1 on #EAC81C, short of the 4.5:1 these
+   10–12px mono labels need, so on yellow they step up to --ink-2 (8:1). The
+   kit does this for its own labels; these two are this app's. */
+.side[data-tone="amber"] .wsw__label,
+.side[data-tone="amber"] .side__note{color:var(--ink-2)}
+
+/* A ghost button sitting on yellow inherits the solid footer button style and
+   loses its rank, so it is given back a quieter, outline-only treatment. */
+.side[data-tone="amber"] .btn--ghost{background:transparent;border-color:rgba(23,24,26,.22)}
+.side[data-tone="amber"] .btn--ghost:hover{background:var(--bg);border-color:rgba(23,24,26,.28)}
+
+/* Toggle state has to be visible, not only announced through aria-pressed.
+   On yellow it becomes a solid white chip with an ink edge — the dark
+   treatment is reserved for the one link that leaves the app. */
+.side__toggles .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--ink)}
+.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"],
+.side[data-tone="amber"] .side__toggles .btn[aria-pressed="true"]:hover{background:var(--bg);border-color:var(--ink);color:var(--ink)}
+
+/* Install control: initPWA fills this slot only when installing is possible,
+   so the slot collapses while it holds nothing visible. */
+.side__pwa:empty{display:none}
+.side__pwa:not(:has(.pwa-install:not([hidden]))){display:none}
+
+/* The author's site — the single dark control in the sidebar, so it reads as
+   an exit whichever colour the sidebar is wearing. */
+.btn--site,
+.side[data-tone="amber"] .btn--site{background:var(--night);border-color:var(--night);color:#fff}
+.btn--site:hover,
+.side[data-tone="amber"] .btn--site:hover{background:var(--night-2);border-color:var(--night-2)}
 
 /* == 2. workspace switcher == */
 .wsw{position:relative;padding:12px;border-bottom:1px solid var(--line);flex:none}

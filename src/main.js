@@ -8,6 +8,7 @@ import {
   overdueInvoices, seatsUsed, resetDemo,
 } from './data.js';
 import { createCopilot } from './agent.js';
+import { initPWA } from '../lib/pwa.js';
 import { iconEl } from './parts.js';
 
 import * as overview from './views/overview.js';
@@ -28,6 +29,12 @@ const NAV = [
   { id: 'settings', label: 'Settings', icon: 'cog', group: 'Administration', view: settings },
 ];
 
+/* arrow leaving a box — the shared icon set has no "external link" glyph,
+   so it is written here in the same 20x20 stroke style as the rest */
+const EXTERNAL_ICON = '<svg viewBox="0 0 20 20" aria-hidden="true">'
+  + '<path d="M11.5 3.5h5v5"/><path d="M16.5 3.5L9.5 10.5"/>'
+  + '<path d="M14.5 11.5v4a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 15.5V7a1.5 1.5 0 0 1 1.5-1.5h4"/></svg>';
+
 const TITLES = Object.fromEntries(NAV.map((n) => [n.id, n.label]));
 const app = qs('#app');
 let current = 'overview';
@@ -39,11 +46,20 @@ const CHROME_KEY = 'opsboard.chrome.v1';
 /* the rail is a desktop idea; under 900px the sidebar is a drawer and stays one */
 const DESKTOP = window.matchMedia('(min-width:901px)');
 
+/* Brand yellow is the default navigation. A stored preference always wins —
+   including an explicit `false`, which is how the plain white sidebar is kept. */
+const CHROME_DEFAULT = { rail: false, tone: true };
+
 const chrome = (() => {
   try {
-    const saved = JSON.parse(localStorage.getItem(CHROME_KEY) || '{}');
-    return { rail: saved.rail === true, tone: saved.tone === true };
-  } catch (_) { return { rail: false, tone: false }; }
+    const raw = localStorage.getItem(CHROME_KEY);
+    if (!raw) return { ...CHROME_DEFAULT };
+    const saved = JSON.parse(raw) || {};
+    return {
+      rail: saved.rail === true,
+      tone: saved.tone === undefined ? CHROME_DEFAULT.tone : saved.tone === true,
+    };
+  } catch (_) { return { ...CHROME_DEFAULT }; }
 })();
 
 function saveChrome() {
@@ -85,24 +101,50 @@ DESKTOP.addEventListener('change', applyChrome);
 /* ---------- about this demo ---------- */
 
 const ABOUT = [
-  ['You can actually use it',
-    'Nothing here is read-only. Create customers and deals, move a deal to another stage, mark an '
-    + 'invoice paid, invite someone, change a permission. Every flow runs for real and the numbers on '
-    + 'the other screens move with it.'],
-  ['Your data stays on your machine',
-    'Everything you enter is saved in this browser\'s local storage. Nothing is sent to a server, '
-    + 'there is no account and no backend. Clear your browser data, or use "Reset demo data", and it '
-    + 'is all gone. It does not sync between browsers or devices.'],
-  ['The assistant is simulated',
-    'Opsboard Copilot answers by matching your question against this app\'s own demo data. It is a '
-    + 'demonstration of the interaction, not a connected AI model, and no request leaves your browser.'],
+  {
+    title: 'What this is',
+    text: 'Opsboard is the operations core of a business: one workspace holding its customers, its '
+      + 'deal pipeline, its invoices, its team and their roles, and the reports built from all of it. '
+      + 'Switch workspace in the sidebar and every screen, count and total re-scopes to that business.',
+  },
+  {
+    title: 'Where it helps a business',
+    list: [
+      'The customer list, the pipeline and the invoice ledger stop living in three separate spreadsheets.',
+      'Money that is overdue is visible on the invoices screen without anyone compiling a report first.',
+      'A new joiner gets an account with a role instead of being handed a shared login.',
+      'Several businesses or branches run on one deployment rather than a separate system each.',
+      'Reports read the same records staff work in every day, so the numbers cannot drift apart.',
+    ],
+  },
+  {
+    title: 'How it would work for real',
+    text: 'The interface and the workflow would stay as they are here. Behind them, the browser storage '
+      + 'is replaced by a real database, sign-in and permissions become accounts rather than a picker, '
+      + 'and hosting, backups and access control are set up properly. This demo is the interface and the '
+      + 'workflow, not the production system.',
+  },
+  {
+    title: 'How this demo works',
+    list: [
+      'You can actually use it. Add a customer or a deal, move a deal a stage, mark an invoice paid, '
+        + 'invite someone — every flow runs and the other screens follow.',
+      'Your data stays in this browser. Nothing is sent to a server, and "Reset demo data" clears it. '
+        + 'It does not sync between browsers or devices.',
+      'The assistant is simulated. Opsboard Copilot reads this app\'s own demo data. It is a '
+        + 'demonstration of the interaction, not a connected model.',
+    ],
+  },
 ];
 
 function aboutModal() {
   const body = h('div', { class: 'about' },
-    ABOUT.map(([title, text]) => h('section', { class: 'about__block' },
-      h('h4', {}, title),
-      h('p', { class: 'muted' }, text))));
+    ABOUT.map((block) => h('section', { class: 'about__block' },
+      h('h4', {}, block.title),
+      block.text ? h('p', { class: 'muted' }, block.text) : null,
+      block.list
+        ? h('ul', { class: 'about__list' }, block.list.map((line) => h('li', { class: 'muted' }, line)))
+        : null)));
   modal({
     title: 'About this demo',
     body,
@@ -162,6 +204,9 @@ function buildShell() {
         'aria-pressed': 'false', 'aria-controls': 'sidebar',
         onclick: () => setChrome('tone', !chrome.tone),
       }, iconEl('tag'), h('span', {}, 'Yellow'))),
+    /* the install control is added here by initPWA, only when installing is
+       actually possible; the slot collapses while it is empty */
+    h('div', { class: 'side__pwa' }),
     h('button', {
       /* label in a span so the rail can hide it; title keeps it readable there */
       class: 'btn btn--block', title: 'Reset demo data', 'aria-label': 'Reset demo data',
@@ -178,6 +223,13 @@ function buildShell() {
       class: 'btn btn--ghost btn--block', title: 'About this demo', 'aria-label': 'About this demo',
       onclick: aboutModal,
     }, iconEl('eye'), h('span', {}, 'About this demo')),
+    h('a', {
+      /* the author's site — the one dark control in the sidebar, so it reads
+         as an exit from the demo whichever colour the sidebar is wearing */
+      class: 'btn btn--block btn--site', href: 'https://www.nasvih.in',
+      target: '_blank', rel: 'noopener noreferrer',
+      title: 'nasvih.in', 'aria-label': 'nasvih.in — opens in a new tab',
+    }, h('span', { html: EXTERNAL_ICON }).firstChild, h('span', {}, 'nasvih.in')),
     h('p', { class: 'side__note' },
       'Sample data only. Saved in this browser, never sent anywhere.')));
 
@@ -351,6 +403,15 @@ r.go();
 
 /* one launcher, bottom right, plus the Cmd/Ctrl+K the assistant binds itself */
 createCopilot().mount(document.body);
+
+/* installable: registers the service worker and, where the browser allows it,
+   puts an "Install app" control in the sidebar footer. iOS has no prompt
+   event, so the instructions arrive through the app's own toast. */
+initPWA({
+  mount: qs('.side__pwa'),
+  appName: 'Opsboard',
+  onNote: (msg) => toast(msg, 'info'),
+});
 
 /* keyboard: / focuses the first search box, Alt+1..7 jumps between screens */
 document.addEventListener('keydown', (e) => {

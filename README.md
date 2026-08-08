@@ -10,6 +10,27 @@ No build step, no dependencies, no network calls. Open it from any static file s
 
 ---
 
+## What this is
+
+Opsboard is the operations core of a business: one workspace holding its customers, its deal
+pipeline, its invoices, its team and their roles, and the reports built from all of it. Switch
+workspace in the sidebar and every screen, count and total re-scopes to that business.
+
+## Where it helps a business
+
+- The customer list, the pipeline and the invoice ledger stop living in three separate spreadsheets.
+- Money that is overdue is visible on the invoices screen without anyone compiling a report first.
+- A new joiner gets an account with a role instead of being handed a shared login.
+- Several businesses or branches run on one deployment rather than a separate system each.
+- Reports read the same records staff work in every day, so the numbers cannot drift apart.
+
+## How it would work for real
+
+The interface and the workflow would stay as they are here. Behind them, the browser storage is
+replaced by a real database, sign-in and permissions become accounts rather than a picker, and
+hosting, backups and access control are set up properly. This demo is the interface and the
+workflow, not the production system.
+
 ## How this demo works
 
 **You can actually use it.** Nothing here is read-only. Create customers and deals, move a deal to
@@ -24,7 +45,7 @@ Nothing is sent to a server, there is no account and no backend. Clear your brow
 app's own demo data. It is a demonstration of the interaction, not a connected AI model, and no
 request leaves your browser.
 
-The same three points are in the app itself, behind the `DEMO` pill in the topbar and the
+The same four blocks are in the app itself, behind the `DEMO` pill in the topbar and the
 "About this demo" button in the sidebar footer.
 
 ---
@@ -63,9 +84,17 @@ Every one of these writes to `localStorage` and survives a reload:
 **Reset demo data** in the sidebar footer (and in Settings) rebuilds all three workspaces from the
 seed and throws away every edit.
 
-The sidebar footer also holds two chrome controls, both remembered in `localStorage`: **Collapse**
-shrinks the sidebar to a 64px icon rail (a desktop control — below 900px the sidebar stays a
-drawer), and **Yellow** switches the sidebar to the brand colour.
+### The sidebar
+
+The navigation is **brand yellow by default**. The **Yellow** button in the footer turns it off for
+a plain white sidebar and back on again; whichever you pick is remembered in `localStorage` and used
+on every later visit, and the button's `aria-pressed` state and its solid white "on" chip both
+follow. Next to it, **Collapse** shrinks the sidebar to a 64px icon rail — a desktop control, since
+below 900px the sidebar is already a drawer behind the menu button.
+
+The footer then holds **Reset demo data**, **About this demo** and a link out to
+[nasvih.in](https://www.nasvih.in), which opens in a new tab. When the app can be installed, an
+**Install app** button appears above them.
 
 ### Opsboard Copilot
 
@@ -92,7 +121,26 @@ Any static server works — `npx serve`, `php -S localhost:4101`, nginx, anythin
 over HTTP rather than opened as a `file://` path, because the app is made of ES modules and browsers
 block module imports from the filesystem.
 
-Requires a current version of Chrome, Firefox, Safari or Edge. Nothing to install.
+Requires a current version of Chrome, Firefox, Safari or Edge. Nothing to install — though you can,
+see below.
+
+## Install it
+
+Opsboard is a progressive web app. Served over HTTP or HTTPS it registers a service worker, caches
+its own shell, and can be installed to the desktop or home screen where it opens in its own window
+with no browser chrome.
+
+- **Chrome, Edge, Brave:** an **Install app** button appears in the sidebar footer once the browser
+  offers the prompt, or use the install icon in the address bar.
+- **iPhone and iPad:** Safari has no install prompt, so the same button explains the route —
+  Share → *Add to Home Screen*.
+- **Offline:** once it has been opened, it keeps working with no connection. The shell is cached and
+  the data was always local, so every screen still renders and every flow still runs.
+
+`manifest.webmanifest` describes the app (name, `./` start URL and scope so it works from a project
+subpath, standalone display, white background, `#EAC81C` theme colour, three icons). `sw.js` holds
+the explicit list of files to cache — **if you add or rename a file, add it to `SHELL` and bump
+`CACHE_VERSION`**, otherwise installed copies keep serving the old version.
 
 ## Deploy to GitHub Pages
 
@@ -108,7 +156,11 @@ without any configuration.
 
 | Path | Purpose |
 |---|---|
-| `index.html` | The only page. Hash-routed shell, font links, `<noscript>` fallback. |
+| `index.html` | The only page. Hash-routed shell, font links, manifest link, theme colour, `<noscript>` fallback. |
+| `manifest.webmanifest` | Web app manifest: name, `./` scope and start URL, standalone display, colours, icons, categories. |
+| `sw.js` | Service worker: caches the explicit `SHELL` file list, serves it cache-first, falls back to `index.html` for navigations so an offline reload works. |
+| `lib/pwa.js` | Registers the service worker and drives the "Install app" control, including the iOS instructions. Unmodified. |
+| `assets/icons/*.png` | App icons: 192, 512 and a maskable 512. |
 | `assets/app.css` | Shared design system: tokens, shell, buttons, tables, forms, modal, assistant. Unmodified. |
 | `assets/opsboard.css` | App-specific components only: workspace switcher, filter bar, pipeline board, aging rows, role matrix, plan picker. |
 | `lib/ui.js` | DOM helpers, formatting, seeded random, `localStorage` store, hash router, toast, modal, CSV export, bar chart, icons. |

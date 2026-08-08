@@ -4,26 +4,44 @@ How the app is put together, what the data looks like, and how to add to it.
 
 ---
 
-## 0. How this demo works
+## 0. What this is and how the demo works
 
-Three claims the app makes to the person using it, stated once here and once in the app itself
-(the `DEMO` pill in the topbar and the "About this demo" button in the sidebar footer both open the
-same modal, defined as `ABOUT` in `src/main.js`):
+The `ABOUT` constant in `src/main.js` holds four blocks, rendered by `aboutModal()` and opened from
+two places: the `DEMO` pill in the topbar and the "About this demo" button in the sidebar footer.
+Each block is `{ title, text }` or `{ title, list }` — a paragraph or a bulleted list, styled by
+`.about__block` / `.about__list` in `assets/opsboard.css`.
+
+**1. What this is.** Opsboard is the operations core of a business: one workspace holding its
+customers, its deal pipeline, its invoices, its team and their roles, and the reports built from all
+of it. Switching workspace re-scopes every screen, count and total.
+
+**2. Where it helps a business.** Five concrete lines, no metrics and no marketing:
+
+- The customer list, the pipeline and the invoice ledger stop living in three separate spreadsheets.
+- Money that is overdue is visible on the invoices screen without anyone compiling a report first.
+- A new joiner gets an account with a role instead of being handed a shared login.
+- Several businesses or branches run on one deployment rather than a separate system each.
+- Reports read the same records staff work in every day, so the numbers cannot drift apart.
+
+**3. How it would work for real.** The interface and the workflow stay as they are; the browser
+storage becomes a real database, the workspace picker becomes accounts and permissions, and hosting,
+backups and access control are set up properly. The demo is the interface and the workflow, not the
+production system.
+
+**4. How this demo works.** The three disclosures, unchanged:
 
 - **You can actually use it.** Nothing is read-only. Create customers and deals, move a deal to
   another stage, mark an invoice paid, invite someone, change a permission — every flow runs for
   real and the numbers on the other screens move with it.
-- **Your data stays on your machine.** Everything entered is saved in the browser's local storage
-  under a single key. Nothing is sent to a server, there is no account and no backend. Clearing
-  browser data or pressing "Reset demo data" removes it. It does not sync between browsers or
-  devices.
+- **Your data stays in this browser.** Everything entered is saved in local storage under a single
+  key. Nothing is sent to a server, there is no account and no backend. Clearing browser data or
+  pressing "Reset demo data" removes it. It does not sync between browsers or devices.
 - **The assistant is simulated.** Opsboard Copilot answers by matching the question against this
   app's own demo data. It is a demonstration of the interaction, not a connected AI model, and no
   request leaves the browser. The assistant panel footer repeats this on every screen.
 
 If you change the disclosure text, change it in all three places: `ABOUT` in `src/main.js`, the
-`note` passed to `Assistant` in `src/agent.js`, and the "How this demo works" section of
-`README.md`.
+`note` passed to `Assistant` in `src/agent.js`, and the matching sections of `README.md`.
 
 ---
 
@@ -155,6 +173,8 @@ reason is returned as a string so the UI and the assistant can both explain *why
 |---|---|---|
 | `lib/ui.js` | `h, qs, qsa, on, esc, money, money2, num, pct, initials, fmtDate, fmtTime, ago, daysFromNow, isoDay, seeded, pick, between, createStore, router, toast, modal, confirmDialog, downloadCSV, barChart, meter, icon, ICONS` | Shared kit, copied in unmodified. |
 | `lib/assistant.js` | `Assistant, pick, esc, renderMarkdownLite` | Shared kit, copied in unmodified. |
+| `lib/pwa.js` | `initPWA({ mount, appName, swPath, onNote })` | Shared kit, copied in unmodified. Registers `sw.js`, captures `beforeinstallprompt`, appends the install control to `mount`, and routes its messages to `onNote`. |
+| `sw.js` | — | Service worker at the app root, so its scope covers the whole app. Owns the `SHELL` file list and `CACHE_VERSION`. |
 | `src/data.js` | `store, seedState, resetDemo, STORE_KEY, STAGES, SEGMENTS, CUSTOMER_STATUS, INVOICE_STATUS, ROLES, PERMISSIONS, PLANS, CURRENCIES, WORKSPACE_IDS`, all selectors, `setWorkspace`, `logActivity` | The only module that writes records. |
 | `src/parts.js` | `wsMoney, iconEl, statusPill, pageHead, statCard, emptyState, searchBox, selectFilter, openDrawer, defList, sectionTitle` | View fragments shared by two or more screens. |
 | `src/agent.js` | `createCopilot, copilotIntents` | Intent pack; imports selectors, never the views. |
@@ -254,7 +274,81 @@ library, no canvas. `meter(value, max, kind)` gives a single bar with `''`, `'ok
 
 ---
 
-## 6. Keyboard and accessibility
+## 6. Sidebar chrome
+
+Two independent preferences live under one `localStorage` key, `opsboard.chrome.v1`, holding
+`{ rail, tone }`:
+
+```js
+const CHROME_DEFAULT = { rail: false, tone: true };   // yellow navigation by default
+```
+
+`tone` drives `data-tone="amber"` on `<aside class="side">`; `rail` drives `.is-rail` on the shell
+and only applies above 900px, since below that the sidebar is already a drawer. The read is
+deliberate about the difference between *unset* and *false*:
+
+- no key stored at all → `CHROME_DEFAULT`, so a first visit gets the yellow sidebar;
+- key stored with `tone: false` → white sidebar, because an explicit choice always wins;
+- unparseable JSON → `CHROME_DEFAULT`.
+
+`applyChrome()` is the single writer. It sets or removes the attribute and then rewrites both
+buttons' `aria-pressed`, `aria-label` and `title` from the same state, so what a screen reader is
+told can never drift from what is on screen. `setChrome(key, value)` persists and calls it.
+
+### What the yellow default changes
+
+`app.css` already carried the `.side[data-tone="amber"]` block; making it the default exposed a few
+things that had only ever been judged against a white sidebar. The shared kit fixes its own two —
+secondary labels move from `--amber-darker` `#6B5400` (4.4:1 on `#EAC81C`, short of the 4.5:1 that
+10–12px text needs) to `--ink-2` (8:1), and `.side[data-tone="amber"] :focus-visible` takes an ink
+outline because the brand-yellow ring is invisible on a yellow ground. The rest are in
+`assets/opsboard.css` — same specificity as the kit rules and loaded after them, so no kit file was
+edited by hand, and every value is an existing token:
+
+| Problem on yellow | Fix |
+|---|---|
+| `.wsw__label` and `.side__note` are this app's labels and used `--amber-darker` too | `--ink-2` on the amber sidebar only |
+| The skip link is an amber fill and lands on top of the sidebar, so it vanished into it | 2px ink border plus an ink focus ring |
+| `.btn--ghost` ("About this demo") inherited the solid footer button style and lost its rank | transparent with an ink hairline on yellow, white on hover |
+| `aria-pressed` on the two toggles had no visible counterpart | pressed = `--amber-soft` with an amber edge on white, a solid white chip with an ink edge on yellow |
+
+Ink text on `#EAC81C` is 10.9:1. Nothing renders white text on yellow anywhere. The one dark element
+in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground, white text, `--night-2` on
+hover); in rail mode it collapses to its icon like the other footer controls, keeping the label in
+`title` and `aria-label`.
+
+---
+
+## 7. Installing (PWA)
+
+Three pieces, all at the app root so the scope covers everything:
+
+| File | Role |
+|---|---|
+| `manifest.webmanifest` | `name`/`short_name` "Opsboard", one-line description, `start_url` and `scope` both `./` so it installs correctly from a GitHub Pages subpath, `display: standalone`, `background_color: #FFFFFF`, `theme_color: #EAC81C`, `lang: en`, categories, and the three icons — 192 and 512 as `purpose: "any"`, the third as `purpose: "maskable"`. |
+| `sw.js` | Caches the explicit `SHELL` array under `${scope}::${CACHE_VERSION}`. Navigations try the network and fall back to the cached `index.html`; same-origin assets are cache-first; the cross-origin font stylesheet is network-first. `activate` deletes every older cache in the same scope. |
+| `lib/pwa.js` | Registers the worker on `load`, swallows `beforeinstallprompt` and reveals the control, and hides itself when already running standalone. |
+
+`index.html` links the manifest, sets `<meta name="theme-color" content="#EAC81C">` and an
+`apple-touch-icon`. `src/main.js` wires it up:
+
+```js
+initPWA({ mount: qs('.side__pwa'), appName: 'Opsboard', onNote: (msg) => toast(msg, 'info') });
+```
+
+`.side__pwa` is an empty slot in the sidebar footer, between the chrome toggles and "Reset demo
+data". It collapses while it holds nothing visible, so nothing moves on browsers that never offer an
+install. `onNote` goes through the app's own `toast`, which is how the iOS "Share → Add to Home
+Screen" instruction is delivered — Safari fires no install event.
+
+**When you add, rename or delete a file, add it to `SHELL` in `sw.js` and bump `CACHE_VERSION`.**
+A path that 404s fails the whole `addAll`, and the install handler swallows that failure to avoid
+breaking the page — so the app keeps working online and silently stops working offline. A stale
+`CACHE_VERSION` is worse: cache-first means installed copies keep serving the old bundle.
+
+---
+
+## 8. Keyboard and accessibility
 
 | Key | Action |
 |---|---|
@@ -290,7 +384,7 @@ Verified down to 390px with no horizontal page scroll.
 
 ---
 
-## 7. Design tokens
+## 9. Design tokens
 
 All colour, radius and type values come from `assets/app.css`. `assets/opsboard.css` adds components
 only and introduces no new colours.
@@ -312,13 +406,17 @@ only and introduces no new colours.
 | `--mono` | JetBrains Mono | Numbers, labels, badges, ids, dates |
 | `--sidebar` / `--bar` / `--gutter` | `248` / `60` / `20` px | Shell metrics |
 
+| `--night` / `--night-2` | `#17181A` / `#222427` | The single dark control: the `nasvih.in` link ground and its hover |
+
 Rules the app holds to: solid fills only — no gradient, no blur, no glow shadow, no emoji as an
-icon. Yellow is always a *fill* with ink text on it, never yellow text on white. Icons are inline
-stroke SVG using `currentColor`, drawn from `ICONS` in `lib/ui.js`.
+icon. Yellow is always a *fill* with ink text on it, never yellow text on white and never white text
+on yellow. Icons are inline stroke SVG using `currentColor`, drawn from `ICONS` in `lib/ui.js`; the
+one exception is the arrow-out-of-box glyph on the `nasvih.in` link, written inline in `src/main.js`
+in the same 20×20 stroke style because the shared set has no external-link icon.
 
 ---
 
-## 8. Checks
+## 10. Checks
 
 ```bash
 # syntax check every module
@@ -331,3 +429,18 @@ curl -sI http://127.0.0.1:4101/ | head -1
 
 The page must load with zero console errors and no network requests other than the two Google Fonts
 stylesheets referenced from `index.html`.
+
+For the installable side, in the browser:
+
+1. **Manifest** — DevTools → Application → Manifest shows the name, the three icons and no errors.
+2. **Service worker** — registered and *activated*; after one reload `navigator.serviceWorker.controller`
+   is non-null and the cache holds one entry per `SHELL` path.
+3. **Offline** — stop the server, reload: the shell, the workspace and every screen still render, and
+   the console stays clean.
+4. **Sidebar** — a fresh profile shows the yellow sidebar with `aria-pressed="true"` on the Yellow
+   toggle; switching it off, reloading, switching it back and reloading again both persist.
+5. **390px** — every screen with no horizontal page scroll.
+
+Last verified: manifest parses with three icons, all 22 `SHELL` paths return 200, the worker
+activates and controls the page after one reload, an offline reload with the server stopped renders
+all seven screens, and 0 console errors were recorded across the seven screens at 1440px and 390px.
