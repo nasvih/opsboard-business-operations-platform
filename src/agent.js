@@ -44,7 +44,37 @@ function findDeal(ws, q) {
     const mine = ws.deals.filter((d) => d.customerId === cust.id);
     if (mine.length) return mine.sort((a, b) => b.value - a.value)[0];
   }
-  return ws.deals.find((d) => text.includes(d.title.toLowerCase().slice(0, 18))) || null;
+  const named = ws.deals.find((d) => text.includes(d.title.toLowerCase().slice(0, 18)));
+  if (named) return named;
+  /* superlatives — "who owns the biggest deal", "the smallest one" */
+  const pool = openDeals(ws).length ? openDeals(ws) : ws.deals;
+  if (!pool.length) return null;
+  const byValue = pool.slice().sort((a, b) => b.value - a.value);
+  if (/\b(biggest|largest|highest|top|most valuable|best)\b/.test(text)) return byValue[0];
+  if (/\b(smallest|lowest|least)\b/.test(text)) return byValue[byValue.length - 1];
+  if (/\b(closest|soonest|next)\b/.test(text)) {
+    return pool.slice().sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate))[0];
+  }
+  return null;
+}
+
+/* Same definition the Reports screen uses, so the two never disagree. */
+function collection(ws) {
+  const issued = ws.invoices.filter((i) => i.status !== 'draft');
+  const settled = issued.filter((i) => i.status === 'paid');
+  const issuedValue = issued.reduce((t, i) => t + i.amount, 0);
+  const settledValue = settled.reduce((t, i) => t + i.amount, 0);
+  const days = settled.filter((i) => i.paidAt)
+    .map((i) => Math.round((new Date(i.paidAt) - new Date(i.issuedAt)) / 86400000));
+  return {
+    issued,
+    settled,
+    issuedValue,
+    settledValue,
+    rate: issuedValue ? (settledValue / issuedValue) * 100 : 0,
+    avgDays: days.length ? Math.round(days.reduce((t, d) => t + d, 0) / days.length) : 0,
+    avgTerms: issued.length ? Math.round(issued.reduce((t, i) => t + i.terms, 0) / issued.length) : 0,
+  };
 }
 
 /* ---------- intents ---------- */
@@ -52,7 +82,7 @@ function findDeal(ws, q) {
 const intents = [
   {
     id: 'revenue',
-    match: [/revenue|turnover|collected|billed|how much did we (make|bill)|this quarter|q[1-4]\b/i],
+    match: [/revenue|turnover|collect(ed|s)?\b|billed|how much did we (make|bill)|this quarter|q[1-4]\b/i],
     trace: 'summed settled invoices in this workspace',
     answer: (q, ctx) => {
       const { ws } = ctx;
@@ -99,8 +129,35 @@ const intents = [
     },
   },
   {
+    id: 'collection',
+    match: [/collection rate|collections|how much have we collected|settled vs issued|paid vs issued|\bdso\b|days to pay|(quickly|fast|long).{0,24}(pay|paid|settle)|payment behaviour|payment behavior/i,
+      'collection rate', 'collection'],
+    trace: 'compared settled invoice value against everything issued',
+    answer: (q, ctx) => {
+      const { ws } = ctx;
+      const c = collection(ws);
+      if (!c.issued.length) return { text: `Nothing has been issued in **${ws.name}** yet, so there is no collection rate to report.` };
+      const late = overdueInvoices(ws);
+      const counts = ['paid', 'sent', 'overdue', 'draft'].map((s) => {
+        const rows = ws.invoices.filter((i) => i.status === s);
+        return [s, String(rows.length), cur(ws, rows.reduce((t, i) => t + i.amount, 0))];
+      });
+      return {
+        text: `**${ws.name}** has collected **${pct(c.rate, 1)}** of what it has issued — `
+          + `${cur(ws, c.settledValue)} settled out of ${cur(ws, c.issuedValue)} across ${plural(c.issued.length, 'issued invoice')}. Drafts are left out.\n`
+          + `Settled invoices take **${plural(c.avgDays, 'day')}** to come in on average, against credit terms averaging ${c.avgTerms} days.\n`
+          + (late.length
+            ? `${cur(ws, outstandingValue(ws))} is still open, and ${cur(ws, late.reduce((t, i) => t + i.amount, 0))} of that is already past due.`
+            : `${cur(ws, outstandingValue(ws))} is still open and none of it is past due.`),
+        table: { head: ['Status', 'Invoices', 'Value'], rows: counts },
+        meta: `read ${ws.invoices.length} invoices · ${ws.name}`,
+        suggestions: ['Which invoices are overdue?', 'Top accounts by revenue', 'What is the revenue this quarter?'],
+      };
+    },
+  },
+  {
     id: 'dealowner',
-    match: [/who owns|owner of|whose deal|responsible for|handling/i, 'who owns', 'owner'],
+    match: [/who owns|owner of|whose deal|responsible for|handling|(biggest|largest|top|smallest) deal/i, 'who owns', 'owner', 'biggest deal'],
     trace: 'matched the question against open deals',
     answer: (q, ctx) => {
       const { ws } = ctx;
@@ -112,6 +169,7 @@ const intents = [
             + `Stage ${stageLabel(deal.stage)}, worth ${cur(ws, deal.value)} at ${deal.probability}% likely, expected to close ${fmtDate(deal.closeDate)}.\n`
             + `The account ${cust} is handled by ${(ws.customers.find((c) => c.id === deal.customerId) || {}).owner}.`,
           meta: `matched 1 of ${ws.deals.length} deals`,
+          suggestions: ['Show the pipeline by stage', 'Who has admin access?', 'Which customers are at risk?'],
         };
       }
       const top = openDeals(ws).sort((a, b) => b.value - a.value).slice(0, 5);
@@ -303,7 +361,8 @@ const intents = [
       text: `I read whatever is in **${ctx.ws.name}** right now. Things I can answer:\n\n`
         + '- revenue this quarter and by month\n'
         + '- overdue invoices and receivables aging\n'
-        + '- who owns a given deal\n'
+        + '- the collection rate and how long invoices take to settle\n'
+        + '- who owns a given deal, including the biggest one\n'
         + '- which accounts are at risk and why\n'
         + '- seat and plan usage\n'
         + '- what changed in the last seven days\n'
