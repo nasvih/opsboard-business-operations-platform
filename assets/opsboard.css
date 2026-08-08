@@ -1,0 +1,117 @@
+/* ============================================================
+   Opsboard — app-specific components.
+   Loaded after app.css. Uses the shared tokens only: no new colours,
+   no gradients, no blur, no shadows beyond the shared ones.
+   1 shell extras · 2 workspace switcher · 3 filters · 4 lists
+   5 pipeline board · 6 aging · 7 role matrix · 8 plans · 9 responsive
+   ============================================================ */
+
+/* == 1. shell extras == */
+.skiplink{position:absolute;left:-9999px;top:0;z-index:100;background:var(--amber-fill);color:var(--on-amber);
+  padding:10px 16px;border-radius:0 0 var(--r) 0;font-weight:600}
+.skiplink:focus{left:0}
+.viewhost{flex:1;min-width:0}
+/* fields laid out by a grid space themselves; drop the stacked margin */
+.grid>.field+.field{margin-top:0}
+.viewhost:focus{outline:none}
+.side__note{font-size:11.5px;color:var(--faint);line-height:1.45;margin-top:10px}
+.pill--btn{cursor:pointer;font-family:var(--mono)}
+.pill--btn:hover{border-color:var(--amber);background:var(--amber-fill);color:var(--on-amber)}
+.about__block+.about__block{margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
+.about__block h4{margin-bottom:5px}
+.about__block p{font-size:13.5px}
+.hide-sm{display:inline}
+.topbar .kbd{margin-left:2px}
+
+/* == 2. workspace switcher == */
+.wsw{position:relative;padding:12px;border-bottom:1px solid var(--line);flex:none}
+.wsw__label{padding:0 2px 6px}
+.wsw__btn{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--surface);
+  border:1px solid var(--line-2);border-radius:var(--r);padding:8px 10px;cursor:pointer;transition:border-color .12s,background .12s}
+.wsw__btn:hover{border-color:var(--amber-line);background:var(--hover)}
+.wsw__meta{display:flex;flex-direction:column;min-width:0;flex:1}
+.wsw__name{font-weight:600;font-size:13.5px}
+.wsw__sub{font-family:var(--mono);font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wsw__chev{width:15px;height:15px;color:var(--faint);flex:none;transform:rotate(90deg)}
+.wsw__list{display:none;position:absolute;left:12px;right:12px;top:calc(100% - 6px);z-index:30;
+  background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r);box-shadow:var(--shadow-2);
+  padding:6px;max-height:60vh;overflow:auto}
+.wsw.is-open .wsw__list{display:block}
+.wsw__opt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;
+  border-radius:var(--r-sm);padding:8px;cursor:pointer}
+.wsw__opt:hover{background:var(--hover)}
+.wsw__opt.is-on{background:var(--amber-soft)}
+.wsw__opt.is-on .wsw__chev{transform:none;color:var(--amber-deep)}
+
+/* == 3. filters == */
+.filterbar{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-top:6px}
+.filterbox{display:flex;flex-direction:column;gap:6px;min-width:150px}
+.filterbox .label{padding:0}
+.select--sm{padding:5px 28px 5px 9px;font-size:12.5px;border-radius:var(--r-sm);background-position:right 6px center;background-size:15px;width:auto;min-width:120px}
+
+/* == 4. lists inside cards and drawers == */
+.itemlist{display:flex;flex-direction:column}
+.itemlist li{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.itemlist li:last-child{border-bottom:0}
+.itemlist li:first-child{padding-top:0}
+.notelist{display:flex;flex-direction:column;gap:10px}
+.notelist li{border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:var(--r-sm);padding:10px 12px;background:var(--surface-2)}
+.notelist li p{font-size:13.5px}
+.deflist{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;font-size:13.5px}
+.deflist dt{font-family:var(--mono);font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);padding-top:3px}
+.deflist dd{min-width:0;overflow-wrap:anywhere}
+.drawer__foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface-2);flex:none}
+.scrim--drawer{padding:0;place-items:stretch}
+
+/* == 5. pipeline board == */
+.kboard{display:grid;grid-template-columns:repeat(5,minmax(168px,1fr));gap:12px;margin-top:16px;
+  overflow-x:auto;padding-bottom:8px;align-items:start}
+.kcol{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-lg);min-width:168px}
+.kcol__head{padding:12px 12px 10px;border-bottom:1px solid var(--line)}
+.kcol__total{font-size:13px;color:var(--muted);margin-top:2px}
+.kcol__body{padding:10px;display:flex;flex-direction:column;gap:10px}
+.kcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:11px 12px}
+.kcard__title{font-weight:600;font-size:13.5px;line-height:1.35}
+.kcard .select{width:100%}
+
+/* == 6. receivables aging == */
+.aging{display:flex;flex-direction:column;gap:12px}
+.aging__row{display:grid;grid-template-columns:96px minmax(0,1fr) 110px 32px;gap:12px;align-items:center}
+.aging__label{font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.aging__val{text-align:right;font-size:13px}
+
+/* == 7. role matrix == */
+.matrix th{text-transform:none;letter-spacing:.08em}
+.matrix td{vertical-align:middle}
+.checkcell{display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.checkcell input{width:17px;height:17px;accent-color:var(--amber);cursor:pointer}
+.checkcell input:disabled{cursor:not-allowed}
+
+/* == 8. plan picker == */
+.planlist{display:flex;flex-direction:column;gap:8px}
+.planopt{display:flex;align-items:center;gap:10px;border:1px solid var(--line-2);border-radius:var(--r);
+  padding:10px 12px;cursor:pointer;font-size:13.5px}
+.planopt:hover{border-color:var(--amber-line);background:var(--hover)}
+.planopt.is-on{border-color:var(--amber);background:var(--amber-soft)}
+.planopt input{accent-color:var(--amber);width:16px;height:16px;flex:none}
+
+/* == 9. responsive == */
+@media (max-width:1080px){
+  .kboard{grid-template-columns:repeat(5,minmax(190px,240px))}
+}
+@media (max-width:900px){
+  .aging__row{grid-template-columns:88px minmax(0,1fr) 96px}
+  .aging__row>:last-child{display:none}
+}
+@media (max-width:640px){
+  .filterbar{gap:10px}
+  .filterbox{min-width:0;flex:1}
+  .search{max-width:none;width:100%}
+  .hide-sm{display:none}
+  .kboard{grid-template-columns:minmax(0,1fr);overflow-x:visible}
+  .kcol{min-width:0}
+  .deflist{grid-template-columns:minmax(0,1fr);gap:2px 0}
+  .deflist dd{margin-bottom:8px}
+  .aging__row{grid-template-columns:76px minmax(0,1fr) 86px}
+}
