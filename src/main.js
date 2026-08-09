@@ -176,7 +176,7 @@ function applyTheme() {
   const dark = isDark();
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   const meta = qs('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#141517' : '#0B7D74');
+  if (meta) meta.setAttribute('content', dark ? '#141517' : '#6B3FA0');
   const btn = qs('[data-tool="theme"]');
   if (btn) {
     const label = dark ? 'Switch to light mode' : 'Switch to dark mode';

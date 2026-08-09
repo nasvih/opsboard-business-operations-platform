@@ -3,7 +3,7 @@
    network), and a single versioned cache so an update wipes the old one.
    Bump CACHE_VERSION whenever the file list or any cached asset changes. */
 
-const CACHE_VERSION = 'v9';
+const CACHE_VERSION = 'v10';
 const CACHE = `${self.registration.scope}::${CACHE_VERSION}`;
 
 /* Opsboard's own shell: every file the app needs to start with no network.

@@ -359,18 +359,19 @@ of `assets/opsboard.css`. No kit file is edited by hand: `assets/app.css` is a v
 
 | Token | Light | Dark | Ratio |
 |---|---|---|---|
-| `--amber`, `--amber-fill` | `#0B7D74` | same | white on it 5.00:1 |
-| `--amber-fill-hi` (hover) | `#096A63` | same | white on it 6.45:1 |
-| `--amber-deep` (text) | `#0A6156` | `#45D9D0` | 7.35:1 on white · 9.9:1 on `--surface` |
-| `--amber-darker` | `#06463E` | `#85E8E0` | 10.75:1 on white · 12.1:1 on `--surface` |
-| `--amber-soft` (tint) | `#D8F1ED` | `#0E2B28` | `--amber-deep` on it 6.20:1 · 8.67:1 |
-| `--amber-line` (hairline) | `#93D2C9` | `#20514A` | — |
+| `--amber`, `--amber-fill` | `#6B3FA0` | same | white on it 7.38:1 |
+| `--amber-fill-hi` (hover) | `#5A3487` | same | white on it 9.23:1 |
+| `--amber-deep` (text) | `#5F3593` | `#C4A0F0` | 8.69:1 on white · 7.98:1 on `--surface` |
+| `--amber-darker` | `#452566` | `#DCC6F8` | 12.28:1 on white · 11.17:1 on `--surface` |
+| `--amber-soft` (tint) | `#EFE7F8` | `#211930` | `--amber-deep` on it 7.22:1 · 7.73:1 |
+| `--amber-line` (hairline) | `#C7ACE4` | `#46375E` | — |
 | `--on-amber` | `#FFFFFF` | same | — |
-| `--hover` | `#EFF9F7` | `#16302C` | — |
+| `--hover` | `#F7F3FC` | `#291F3A` | — |
 
-The accent sits at 175°, well clear of `--ok` at 149° (`#1E7A4B`), and its tint is the more
-saturated of the two, so a selected row and a paid pill stay tellable apart. In dark mode `--ok`
-lifts to a mint `#5FCB97`, so `--amber-deep` is pulled a few degrees further round to `#45D9D0`.
+The accent sits at 267°. The only other cool colour in the app is `--info` at 211° (`#1F5C9E`), a
+56° gap that holds in dark mode too (`#7CB7EE` at 209° against `#C4A0F0` at 267°), so a selected row
+and an in-progress pill stay tellable apart. `--ok`, `--warn` and `--bad` are green, gold and red,
+nowhere near it, and the violet is well round from the indigo a sibling app wears.
 
 The kit's yellow is a *light* fill carrying ink text. This accent is a *dark* fill, so the pairing
 flips — `--on-amber` is white — and everything the kit wrote for a light sidebar inverts with it.
@@ -378,17 +379,17 @@ flips — `--on-amber` is white — and everything the kit wrote for a light sid
 
 | Written for a light yellow fill | Rewritten for a dark accent fill |
 |---|---|
-| ink text, `--ink-2` for small labels | white text, `#F0F8F7` (4.64:1) for the 10–12px mono labels |
-| chips at `rgba(255,255,255,.72)` with ink content | chips at `rgba(23,24,26,.18)` with white content (6.36:1) |
+| ink text, `--ink-2` for small labels | white text, `#F3EFF8` (6.51:1) for the 10–12px mono labels |
+| chips at `rgba(255,255,255,.72)` with ink content | chips at `rgba(23,24,26,.18)` with white content (8.84:1) |
 | ink hairlines, `rgba(23,24,26,.16)` | white hairlines, `rgba(255,255,255,.24)` |
-| ink focus ring (the yellow ring vanished on yellow) | white ring — ink would be 4.1:1 here |
+| ink focus ring (the yellow ring vanished on yellow) | white ring — ink would be 2.41:1 here |
 | a `[data-theme="dark"]` block re-pinning the subtree back to the light palette, because the yellow stayed light in both schemes | the fill is dark in both schemes, so that re-pin is put back to the dark palette and one set of rules serves both |
 | `.btn--ghost` transparent with an ink hairline | transparent with a white hairline |
-| pressed brand-row control: a white chip with an ink edge | a white chip carrying `#06463E` |
+| pressed brand-row control: a white chip with an ink edge | a white chip carrying `#452566` |
 
 Two things inside that subtree are *not* painted on the fill and take the page's own colours back
 off the tokens: the workspace popover (`.wsw__list`), and the selected nav item, which stays the
-white chip the kit drew and carries `#06463E` at 10.75:1.
+white chip the kit drew and carries `#452566` at 12.28:1.
 
 The skip link is unchanged in structure: an accent fill with white text and a 2px ink border, so it
 still separates from the sidebar it lands on.
@@ -467,11 +468,11 @@ Three pieces, all at the app root so the scope covers everything:
 
 | File | Role |
 |---|---|
-| `manifest.webmanifest` | `name`/`short_name` "Opsboard", one-line description, `start_url` and `scope` both `./` so it installs correctly from a GitHub Pages subpath, `display: standalone`, `background_color: #FFFFFF`, `theme_color: #0B7D74`, `lang: en`, categories, and the three icons — 192 and 512 as `purpose: "any"`, the third as `purpose: "maskable"`. |
+| `manifest.webmanifest` | `name`/`short_name` "Opsboard", one-line description, `start_url` and `scope` both `./` so it installs correctly from a GitHub Pages subpath, `display: standalone`, `background_color: #FFFFFF`, `theme_color: #6B3FA0`, `lang: en`, categories, and the three icons — 192 and 512 as `purpose: "any"`, the third as `purpose: "maskable"`. |
 | `sw.js` | Caches the explicit `SHELL` array under `${scope}::${CACHE_VERSION}`. Navigations try the network and fall back to the cached `index.html`; same-origin assets are cache-first; the cross-origin font stylesheet is network-first. `activate` deletes every older cache in the same scope. |
 | `lib/pwa.js` | Registers the worker on `load`, swallows `beforeinstallprompt` and reveals the control, and hides itself when already running standalone. |
 
-`index.html` links the manifest, sets `<meta name="theme-color" content="#0B7D74">` and an
+`index.html` links the manifest, sets `<meta name="theme-color" content="#6B3FA0">` and an
 `apple-touch-icon`. `src/main.js` wires it up:
 
 ```js
@@ -537,13 +538,13 @@ only and introduces no new colours.
 |---|---|---|
 | `--bg`, `--surface` | `#FFFFFF` | Page and card ground |
 | `--surface-2` | `#FAFAF8` | Table headers, column wells, assistant log |
-| `--hover` | `#EFF9F7` | Row and control hover |
+| `--hover` | `#F7F3FC` | Row and control hover |
 | `--ink` / `--ink-2` / `--muted` / `--faint` | `#17181A` / `#2E3033` / `#5A5F66` / `#686E75` | Text scale |
 | `--line` / `--line-2` | `#E7E7E4` / `#D8D8D3` | Hairlines and control borders |
-| `--amber` / `--amber-fill` | `#0B7D74` | Brand fill — buttons, bars, active states, the launcher |
+| `--amber` / `--amber-fill` | `#6B3FA0` | Brand fill — buttons, bars, active states, the launcher |
 | `--on-amber` | `#FFFFFF` | Text on the accent fill (5.00:1) |
-| `--amber-deep` / `--amber-darker` | `#0A6156` / `#06463E` | Accent text on white, where the fill would be too light to read |
-| `--amber-soft` / `--amber-line` | `#D8F1ED` / `#93D2C9` | Active nav, selected plan, About button, unread notification |
+| `--amber-deep` / `--amber-darker` | `#5F3593` / `#452566` | Accent text on white, where the fill would be too light to read |
+| `--amber-soft` / `--amber-line` | `#EFE7F8` / `#C7ACE4` | Active nav, selected plan, About button, unread notification |
 | `--ok` / `--warn` / `--bad` / `--info` | `#1E7A4B` / `#9A6400` / `#B3261E` / `#1F5C9E` | Status, each with a `-soft` ground and `-line` border |
 | `--r-lg` / `--r` / `--r-sm` / `--r-xs` | `12` / `8` / `6` / `4` px | Radius scale |
 | `--sans` | Inter | Interface text |

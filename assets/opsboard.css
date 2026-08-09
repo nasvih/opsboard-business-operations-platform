@@ -8,38 +8,47 @@
    ============================================================ */
 
 /* == 0. accent ==
-   Opsboard's accent is a deep green-cyan. The shared kit ships one yellow and
+   Opsboard's accent is a deep plum. The shared kit ships one yellow and
    names its slots --amber-*; the names stay — the kit and every app still point
    at the same slots — and only the values move here.
 
-   The kit's yellow is a light fill that carries ink text. #0B7D74 is a dark
-   fill, so the pairing flips: --on-amber is white (5.00:1 on the fill; ink
-   would be 3.55:1). --amber-deep is the readable shade on white (7.35:1) and
-   holds 6.20:1 on --amber-soft; --amber-darker is the heavier one (10.75:1).
+   The kit's yellow is a light fill that carries ink text. #6B3FA0 is a dark
+   fill, so the pairing flips: --on-amber is white (7.38:1 on the fill; ink
+   would be 2.41:1). --amber-deep is the readable shade on white (8.69:1) and
+   holds 7.22:1 on --amber-soft; --amber-darker is the heavier one (12.28:1).
    --hover is the accent's own tint, so it moves with it.
 
-   Held clear of --ok (#1E7A4B): the accent sits at 175° against the green's
-   152°, and its tint is the more saturated of the two, so a selected row and a
-   paid pill stay tellable apart. Solid colours only, as in the kit. */
+   Held clear of --info (#1F5C9E), the only other cool colour on screen: the
+   accent sits at 267° against the blue's 211°, so a selected row and an
+   in-progress pill stay tellable apart, and it is the same 56° gap in dark.
+   Also held well round from deskgrid's indigo (238°). --ok, --warn and --bad
+   are green, gold and red, nowhere near it. Solid colours only, as in the kit. */
 :root{
-  --hover:#EFF9F7;
-  --amber:#0B7D74;       --amber-deep:#0A6156;   --amber-darker:#06463E;
-  --amber-fill:#0B7D74;  --amber-fill-hi:#096A63;
-  --amber-soft:#D8F1ED;  --amber-line:#93D2C9;   --on-amber:#FFFFFF;
+  --hover:#F7F3FC;
+  --amber:#6B3FA0;       --amber-deep:#5F3593;   --amber-darker:#452566;
+  --amber-fill:#6B3FA0;  --amber-fill-hi:#5A3487;
+  --amber-soft:#EFE7F8;  --amber-line:#C7ACE4;   --on-amber:#FFFFFF;
 }
 /* the four the kit re-declares for the dark palette, re-declared again. The
-   fill itself does not change between schemes — white on it is 5.00:1 either
+   fill itself does not change between schemes — white on it is 7.38:1 either
    way — so only the tint, the hairline and the two text shades move. */
 [data-theme="dark"]{
-  --hover:#16302C;
-  --amber-soft:#0E2B28;  --amber-line:#20514A;
-  /* pulled a few degrees further round than the light shade: in this scheme
-     --ok lifts to #5FCB97, and a mint and a cyan that close together in a
-     10px pill are not worth the risk */
-  --amber-deep:#45D9D0;  --amber-darker:#85E8E0;
+  --hover:#291F3A;
+  --amber-soft:#211930;  --amber-line:#46375E;
+  /* the two text shades lift for the dark ground: 7.73:1 and 10.81:1 on the
+     tint, 7.98:1 and 11.17:1 on --surface. Nothing else on screen is violet,
+     so unlike the previous accent they need no extra push round the wheel. */
+  --amber-deep:#C4A0F0;  --amber-darker:#DCC6F8;
 }
 /* text selection: the kit pins ink on its yellow; on this fill it is white */
 ::selection{background:var(--amber-fill);color:var(--on-amber)}
+/* The kit draws every focus ring in --amber, which does not move between
+   schemes. On the light ground that is 7.38:1; on the dark ground it is 2.36:1
+   and the ring all but vanishes. The dark scheme takes --amber-deep instead
+   (7.98:1 on --surface). Written here, high in the file, so the two subtrees
+   that need a white ring — the accent sidebar and the phone stage — still win
+   it back further down. */
+[data-theme="dark"] :focus-visible{outline-color:var(--amber-deep)}
 
 /* == 1. shell extras == */
 /* the skip link lands on top of the sidebar, which wears the accent by
@@ -92,13 +101,14 @@
    schemes, so these rules are written once and the kit's dark-mode re-pin is
    put back to the dark palette below rather than being worked around.
 
-   White on #0B7D74 is 5.00:1. The 10–12px mono labels drop to #F0F8F7, which
-   is 4.64:1 — still over AA — so quiet text stays quiet without going under. */
+   White on #6B3FA0 is 7.38:1. The 10–12px mono labels drop to #F3EFF8, which
+   is 6.51:1 — comfortably over AA — so quiet text stays quiet without going
+   under. */
 [data-theme="dark"] .side[data-tone="amber"]{
   --ink:#F2F2F0; --ink-2:#D7D8DA; --muted:#A2A8B0; --faint:#8E959D;
   --bg:#141517; --surface:#191A1D; --surface-2:#1F2124;
-  --line:#2C2E32; --line-2:#3A3D42; --hover:#16302C;
-  --amber-deep:#4FD8C4; --amber-darker:#86E6D6;
+  --line:#2C2E32; --line-2:#3A3D42; --hover:#291F3A;
+  --amber-deep:#C4A0F0; --amber-darker:#DCC6F8;
 }
 /* primary text and icons on the fill */
 .side[data-tone="amber"] .side__name,
@@ -112,31 +122,35 @@
 .side[data-tone="amber"] .wsw__label,
 .side[data-tone="amber"] .wsw__sub,
 .side[data-tone="amber"] .wsw__chev,
-.side[data-tone="amber"] .side__note{color:#F0F8F7}
+.side[data-tone="amber"] .side__note{color:#F3EFF8}
 /* the workspace popover is the one thing in here that is not painted on the
    fill — it is a panel on the page surface, so it takes the page's own text
    colours back off the tokens rather than the light-on-dark set above */
 .side[data-tone="amber"] .wsw__list .wsw__name{color:var(--ink)}
 .side[data-tone="amber"] .wsw__list .wsw__sub,
 .side[data-tone="amber"] .wsw__list .wsw__opt:not(.is-on) .wsw__chev{color:var(--faint)}
+/* and its focus ring for the same reason: the white ring the fill needs is
+   invisible on this panel in light mode. --amber-deep is the shade that reads
+   on a page surface in either scheme — 8.69:1 light, 7.98:1 dark. */
+.side[data-tone="amber"] .wsw__list :focus-visible{outline-color:var(--amber-deep)}
 /* hairlines lift off the fill instead of cutting into it */
 .side[data-tone="amber"] .side__brand,
 .side[data-tone="amber"] .side__foot,
 .side[data-tone="amber"] .wsw,
 .side[data-tone="amber"] .navgroup+.navgroup{border-color:rgba(255,255,255,.24)}
 /* a hover darkens the fill; the selected screen stays the white chip the kit
-   drew, with the accent's own heavy shade on it (10.75:1) */
+   drew, with the accent's own heavy shade on it (12.28:1) */
 .side[data-tone="amber"] .navlink:hover{background:rgba(23,24,26,.10)}
-.side[data-tone="amber"] .navlink.is-active{background:#FFFFFF;color:#06463E}
+.side[data-tone="amber"] .navlink.is-active{background:#FFFFFF;color:#452566}
 .side[data-tone="amber"] .navlink.is-active svg,
-.side[data-tone="amber"] .navlink.is-active .navlink__count{color:#0A6156}
-/* the focus ring: the kit's ink ring is only 4.1:1 on this fill, white is 5:1 */
+.side[data-tone="amber"] .navlink.is-active .navlink__count{color:#5F3593}
+/* the focus ring: the kit's ink ring is only 2.4:1 on this fill, white is 7.4:1 */
 .side[data-tone="amber"] :focus-visible{outline-color:#FFFFFF}
 /* the two white marks keep their shape and swap which side is which */
 .side[data-tone="amber"] .mark,
 .side[data-tone="amber"] .avatar--amber{background:#FFFFFF;color:var(--amber-fill)}
 /* Chips on a dark fill go darker, not lighter: white on a 18%-ink chip is
-   6.36:1, where the kit's 72%-white chip would have left white on near-white. */
+   8.84:1, where the kit's 72%-white chip would have left white on near-white. */
 .side[data-tone="amber"] .btn,
 .side[data-tone="amber"] .wsw__btn,
 .side[data-tone="amber"] .side__brandbtns .btn{background:rgba(23,24,26,.18);border-color:rgba(255,255,255,.30);color:#FFFFFF}
@@ -155,7 +169,7 @@
    link that leaves the app. */
 .side__brandbtns .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--ink)}
 .side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"],
-.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:#FFFFFF;border-color:#FFFFFF;color:#06463E}
+.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:#FFFFFF;border-color:#FFFFFF;color:#452566}
 
 /* The author's site — the single dark control in the sidebar, so it reads as
    an exit whichever colour the sidebar is wearing. */
@@ -336,7 +350,7 @@
 .stage__bar{display:flex;align-items:center;gap:16px;width:min(760px,100%);justify-content:space-between;flex:none}
 .stage__name{font-weight:700;font-size:17px;letter-spacing:-.02em}
 .stage__size{color:var(--on-amber)}
-/* the ring is white for the same reason the sidebar's is: ink is 4.1:1 here */
+/* the ring is white for the same reason the sidebar's is: ink is 2.4:1 here */
 .stage :focus-visible{outline-color:#FFFFFF}
 .phone{position:relative;flex:none;background:var(--night);border-radius:38px;padding:12px;
   transform-origin:top center}

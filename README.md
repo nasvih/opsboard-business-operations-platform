@@ -109,7 +109,7 @@ seed and throws away every edit.
 
 Two icon-only controls sit on the brand row at the top of the sidebar, right of the app name.
 
-The navigation wears the **brand accent by default** — a deep green-cyan, `#0B7D74`. The
+The navigation wears the **brand accent by default** — a deep plum, `#6B3FA0`. The
 right-hand control — a circle half filled — switches between the accent sidebar and a plain
 white one. It names no colour: it is labelled *Sidebar colour* for screen readers and reports
 the accent tone through `aria-pressed`. Whichever
@@ -202,7 +202,7 @@ with no browser chrome.
   the data was always local, so every screen still renders and every flow still runs.
 
 `manifest.webmanifest` describes the app (name, `./` start URL and scope so it works from a project
-subpath, standalone display, white background, `#0B7D74` theme colour, three icons). `sw.js` holds
+subpath, standalone display, white background, `#6B3FA0` theme colour, three icons). `sw.js` holds
 the explicit list of files to cache — **if you add or rename a file, add it to `SHELL` and bump
 `CACHE_VERSION`**, otherwise installed copies keep serving the old version.
 
