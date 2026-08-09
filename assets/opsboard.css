@@ -165,6 +165,27 @@
   .filterbar{gap:10px}
   .filterbox{min-width:0;flex:1}
   .search{max-width:none;width:100%}
+  /* Every table in this app sits in a horizontal scroller. The kit lets card
+     tables re-wrap their headers at this width, which here crushed seven
+     columns into one word per line and still ran past the edge. Inside a
+     scroller the honest answer is to let the table keep its natural width and
+     scroll, so rows stay one line tall and nothing is half-sliced. */
+  .tablewrap--scroll table.data{min-width:max-content}
+  .tablewrap--scroll table.data th{white-space:nowrap}
+  .tablewrap--scroll table.data td{white-space:nowrap}
+  /* the checkbox matrix is the one table whose first column may wrap: its
+     capability names are sentences, not labels */
+  .tablewrap--scroll table.matrix td:first-child{white-space:normal;min-width:160px}
+  /* a card head holding a row of controls has no room left for its title on
+     the same line, so the controls take their own line underneath */
+  .card__head{flex-wrap:wrap}
+  .card__head>.btnrow{flex-basis:100%}
+  /* bar charts: six columns of ₹ figures do not fit across a phone, and the
+     value above each bar is the point of the chart. Give the columns a floor
+     and let the chart scroll rather than ellipsing every number. */
+  .bars{gap:4px;overflow-x:auto;overflow-y:hidden;padding-bottom:2px}
+  .bars__col{flex:1 0 48px;min-width:48px}
+  .bars__x{font-size:9px}
   /* the head is a row of title plus actions; at this width the title has no
      room left beside two buttons, so the two parts stack instead */
   .page-head{flex-direction:column;gap:12px}
@@ -189,6 +210,9 @@
 .topbar__tools .btn--icon[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber-line);color:var(--amber-deep)}
 .topbar__title,.topbar__sub{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pill--btn{white-space:nowrap}
+/* the icon controls are fixed-size chips, not flexible ones: without this the
+   burger squeezed to 23px wide once the bar ran out of room */
+.topbar .btn--icon{flex:none}
 
 /* == 11. notifications == */
 .notif{position:relative;flex:none}
@@ -243,6 +267,63 @@ body.is-staged .assist-fab,body.is-staged .assist,body.is-staged .toasts{display
   .topbar{gap:8px;padding:0 12px}
   .notifpanel{position:fixed;left:12px;right:12px;top:calc(var(--bar) + 8px);width:auto;
     max-height:calc(100vh - var(--bar) - 20px)}
+}
+
+/* == 12a. drawer scrim ==
+   Under 900px the sidebar becomes a 248px slide-over pinned above the topbar,
+   which buries the burger that opened it: on a phone the only way back out was
+   Escape or a lucky tap on the strip of page still showing. This lays a scrim
+   over everything the drawer does not cover. It hangs off .main, so a tap on it
+   lands on .main and runs the close handler that is already there — no new
+   markup, no new script. Kept under the drawer's own z-index so the nav stays
+   live. */
+@media (max-width:900px){
+  .side.is-open ~ .main::before{content:"";position:fixed;inset:0;z-index:60;
+    background:rgba(23,24,26,.42)}
+}
+
+/* == 12b. touch sizing ==
+   Below 900px every one of these is being tapped, not clicked. The kit's
+   desktop sizes (30px chips, 34px icons, 24px pills) are under the 44px
+   guidance, so they grow here only — the desktop layout is untouched. */
+@media (max-width:900px){
+  .btn{min-height:44px}
+  .btn--sm{min-height:40px}
+  .navlink{min-height:44px}
+  /* the tone toggle grows to 40px, so the brand row gives back the padding it
+     needs to keep "OPERATIONS PLATFORM" on one line */
+  .side__brand{padding:0 14px}
+  .side__brandbtns .btn{width:40px;height:40px;min-height:40px}
+  .topbar .btn--icon,.topbar__tools .btn--icon{width:44px;height:44px;min-height:44px}
+  .pill--btn{min-height:40px;padding:8px 10px}
+  .notifitem__read{width:40px;height:40px;min-height:40px}
+  .notifitem__go{padding:11px 8px}
+  .wsw__btn{min-height:48px}
+  .wsw__opt{min-height:48px}
+  .tab{padding:12px 14px}
+  .planopt{min-height:48px}
+  .checkcell{min-height:44px}
+  .checkcell input{width:20px;height:20px}
+}
+/* Under 400px the workspace name under the page title is what pushes the title
+   itself down to three letters. The name is already in the drawer and on the
+   page heading, so the bar drops it and keeps the title readable. */
+@media (max-width:400px){
+  .topbar__sub{display:none}
+  .topbar{gap:6px;padding:0 10px}
+  .topbar__title{font-size:14.5px}
+  /* the bar is four controls plus a title on a 320px screen: the icons drop
+     back to the 40px floor and the demo pill loses its padding rather than the
+     title losing its letters */
+  .topbar .btn--icon,.topbar__tools .btn--icon{width:40px;height:40px;min-height:40px}
+  .pill--btn{font-size:9px;padding:6px 7px;letter-spacing:.02em;min-height:40px}
+}
+@media (max-width:360px){
+  /* last resort on the smallest phones: the demo pill drops "this demo" and
+     keeps just "ABOUT". The text stays in the DOM, so the button still
+     announces its full label; only the drawn glyphs shrink. */
+  .pill--btn{font-size:0;padding:6px 9px}
+  .pill--btn::after{content:"ABOUT";font-size:9.5px;font-weight:600;letter-spacing:.06em}
 }
 
 /* == 13. dark mode ==
