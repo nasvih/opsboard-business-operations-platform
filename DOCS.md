@@ -332,7 +332,7 @@ without bound. The key is read once at boot and written by `saveChrome()` after 
 and only applies above 900px, since below that the sidebar is already a drawer. The read is
 deliberate about the difference between *unset* and *false*:
 
-- no key stored at all → `CHROME_DEFAULT`, so a first visit gets the yellow sidebar;
+- no key stored at all → `CHROME_DEFAULT`, so a first visit gets the accent sidebar;
 - key stored with `tone: false` → white sidebar, because an explicit choice always wins;
 - unparseable JSON → `CHROME_DEFAULT`.
 
@@ -344,37 +344,61 @@ Both controls live in `.side__brandbtns`, on the brand row beside the app name, 
 visible text — the kit clips their `<span>` and sizes them to 30×30. The rail control names the
 action it performs (*Collapse sidebar* / *Expand sidebar*) and swaps its glyph with the state; the
 colour control never names a colour at all, keeping a fixed *Sidebar colour* for `title` and
-`aria-label` and reporting the yellow tone only through `aria-pressed`. Their two glyphs —
+`aria-label` and reporting the accent tone only through `aria-pressed`. Their two glyphs —
 a panel with a chevron, and a circle half filled — are written inline in `src/main.js` in the
 kit's 20×20 stroke style for the same reason the link glyphs are: `ICONS` carries neither and
 `lib/ui.js` is a verbatim copy. In rail mode `.shell.is-rail .side__brandbtns` stacks them into a
 column under the mark, so both stay reachable inside 64px. Below 900px the rail control is hidden
 in `assets/opsboard.css`, because a drawer has nothing to collapse.
 
-### What the yellow default changes
+### The accent, and what the accent default changes
 
-`app.css` already carried the `.side[data-tone="amber"]` block; making it the default exposed a few
-things that had only ever been judged against a white sidebar. The shared kit fixes its own two —
-secondary labels move from `--amber-darker` `#6B5400` (4.4:1 on `#EAC81C`, short of the 4.5:1 that
-10–12px text needs) to `--ink-2` (8:1), and `.side[data-tone="amber"] :focus-visible` takes an ink
-outline because the brand-yellow ring is invisible on a yellow ground. The rest are in
-`assets/opsboard.css` — same specificity as the kit rules and loaded after them, so no kit file was
-edited by hand, and every value is an existing token:
+The shared kit ships one yellow accent and names its slots `--amber-*`. Opsboard keeps the names —
+the kit and every app still point at the same slots — and overrides only the values, in section 0
+of `assets/opsboard.css`. No kit file is edited by hand: `assets/app.css` is a verbatim copy.
 
-| Problem on yellow | Fix |
+| Token | Light | Dark | Ratio |
+|---|---|---|---|
+| `--amber`, `--amber-fill` | `#0B7D74` | same | white on it 5.00:1 |
+| `--amber-fill-hi` (hover) | `#096A63` | same | white on it 6.45:1 |
+| `--amber-deep` (text) | `#0A6156` | `#45D9D0` | 7.35:1 on white · 9.9:1 on `--surface` |
+| `--amber-darker` | `#06463E` | `#85E8E0` | 10.75:1 on white · 12.1:1 on `--surface` |
+| `--amber-soft` (tint) | `#D8F1ED` | `#0E2B28` | `--amber-deep` on it 6.20:1 · 8.67:1 |
+| `--amber-line` (hairline) | `#93D2C9` | `#20514A` | — |
+| `--on-amber` | `#FFFFFF` | same | — |
+| `--hover` | `#EFF9F7` | `#16302C` | — |
+
+The accent sits at 175°, well clear of `--ok` at 149° (`#1E7A4B`), and its tint is the more
+saturated of the two, so a selected row and a paid pill stay tellable apart. In dark mode `--ok`
+lifts to a mint `#5FCB97`, so `--amber-deep` is pulled a few degrees further round to `#45D9D0`.
+
+The kit's yellow is a *light* fill carrying ink text. This accent is a *dark* fill, so the pairing
+flips — `--on-amber` is white — and everything the kit wrote for a light sidebar inverts with it.
+`.side[data-tone="amber"]` is the block that changes most:
+
+| Written for a light yellow fill | Rewritten for a dark accent fill |
 |---|---|
-| `.wsw__label` and `.side__note` are this app's labels and used `--amber-darker` too | `--ink-2` on the amber sidebar only |
-| The skip link is an amber fill and lands on top of the sidebar, so it vanished into it | 2px ink border plus an ink focus ring |
-| `.btn--ghost` inherited the solid footer button style on yellow and lost its rank | transparent with an ink hairline on yellow, white on hover |
-| `aria-pressed` on the two brand-row controls had no visible counterpart | pressed = `--amber-soft` with an amber edge on white, a solid white chip with an ink edge on yellow |
+| ink text, `--ink-2` for small labels | white text, `#F0F8F7` (4.64:1) for the 10–12px mono labels |
+| chips at `rgba(255,255,255,.72)` with ink content | chips at `rgba(23,24,26,.18)` with white content (6.36:1) |
+| ink hairlines, `rgba(23,24,26,.16)` | white hairlines, `rgba(255,255,255,.24)` |
+| ink focus ring (the yellow ring vanished on yellow) | white ring — ink would be 4.1:1 here |
+| a `[data-theme="dark"]` block re-pinning the subtree back to the light palette, because the yellow stayed light in both schemes | the fill is dark in both schemes, so that re-pin is put back to the dark palette and one set of rules serves both |
+| `.btn--ghost` transparent with an ink hairline | transparent with a white hairline |
+| pressed brand-row control: a white chip with an ink edge | a white chip carrying `#06463E` |
 
-Ink text on `#EAC81C` is 10.9:1. Nothing renders white text on yellow anywhere. The one inverted
-element in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground, white text,
-`--night-2` on hover). The **GitHub** link next to it is a plain outline control, so the
-dark treatment stays unique. Both are built by `outLink(url, label, icon, cls)` in `src/main.js`,
-which sets `target="_blank"`, `rel="noopener noreferrer"`, a `title` and an `aria-label` ending in
-"opens in a new tab"; in rail mode both collapse to their icon like the other footer controls,
-keeping the label in `title` and `aria-label`.
+Two things inside that subtree are *not* painted on the fill and take the page's own colours back
+off the tokens: the workspace popover (`.wsw__list`), and the selected nav item, which stays the
+white chip the kit drew and carries `#06463E` at 10.75:1.
+
+The skip link is unchanged in structure: an accent fill with white text and a 2px ink border, so it
+still separates from the sidebar it lands on.
+
+The one inverted element in the sidebar is the `nasvih.in` link (`.btn--site`, `--night` ground,
+white text, `--night-2` on hover). The **GitHub** link next to it is a plain outline control, so
+the dark treatment stays unique. Both are built by `outLink(url, label, icon, cls)` in
+`src/main.js`, which sets `target="_blank"`, `rel="noopener noreferrer"`, a `title` and an
+`aria-label` ending in "opens in a new tab"; in rail mode both collapse to their icon like the
+other footer controls, keeping the label in `title` and `aria-label`.
 
 The two glyphs those links use — an arrow leaving a box and code brackets — are written inline in
 `src/main.js` in the kit's 20×20 stroke style, because `ICONS` in `lib/ui.js` carries neither and
@@ -397,12 +421,12 @@ also listened to, so a system change is followed until the reader makes an expli
 A five-line inline script in `index.html` sets the attribute before the stylesheets paint, so a dark
 session never flashes white. It reads the same key and duplicates nothing else.
 
-The dark palette itself is in `app.css` under `[data-theme="dark"]`. What `assets/opsboard.css` adds
-is the set of corrections for **things sitting on the brand yellow**, which does not change between
-schemes: `--on-amber` stays `#17181A`, so the sidebar's text, marks, chips and hover states are
-pinned back to it rather than following the themed `--ink`, which is now near-white. The same block
-darkens the shared `<select>` chevron and puts dark text on the solid `--ok` / `--bad` toast and
-badge fills.
+The dark palette itself is in `app.css` under `[data-theme="dark"]`; `assets/opsboard.css` then
+re-declares the four accent tokens the kit re-declares there (`--amber-soft`, `--amber-line`,
+`--amber-deep`, `--amber-darker`) plus `--hover`. The accent *fill* is the same colour in both
+schemes and carries white text either way, so the sidebar needs no dark-mode branch at all. What is
+left in section 13 is two corrections: the shared `<select>` chevron, drawn with a light-mode grey,
+and dark text on the solid `--ok` / `--bad` toast and badge fills.
 
 ### Notifications
 
@@ -424,7 +448,7 @@ updates the bell. Every row carries a word as well as a colour (`Overdue`, `Clos
 
 ### Device preview
 
-The phone control appends a `.stage` overlay: a yellow surround, the app name, a **Back to desktop**
+The phone control appends a `.stage` overlay: an accent surround, the app name, a **Back to desktop**
 button, and an `<iframe src="./index.html?frame=phone#/<current screen>">` at 390 × 844 inside a dark
 bezel. It is a real iframe, not a transform of the desktop layout, so the app's own media queries
 decide what it looks like. `fitPhone()` scales the bezel down on short viewports and is re-run on
@@ -443,11 +467,11 @@ Three pieces, all at the app root so the scope covers everything:
 
 | File | Role |
 |---|---|
-| `manifest.webmanifest` | `name`/`short_name` "Opsboard", one-line description, `start_url` and `scope` both `./` so it installs correctly from a GitHub Pages subpath, `display: standalone`, `background_color: #FFFFFF`, `theme_color: #EAC81C`, `lang: en`, categories, and the three icons — 192 and 512 as `purpose: "any"`, the third as `purpose: "maskable"`. |
+| `manifest.webmanifest` | `name`/`short_name` "Opsboard", one-line description, `start_url` and `scope` both `./` so it installs correctly from a GitHub Pages subpath, `display: standalone`, `background_color: #FFFFFF`, `theme_color: #0B7D74`, `lang: en`, categories, and the three icons — 192 and 512 as `purpose: "any"`, the third as `purpose: "maskable"`. |
 | `sw.js` | Caches the explicit `SHELL` array under `${scope}::${CACHE_VERSION}`. Navigations try the network and fall back to the cached `index.html`; same-origin assets are cache-first; the cross-origin font stylesheet is network-first. `activate` deletes every older cache in the same scope. |
 | `lib/pwa.js` | Registers the worker on `load`, swallows `beforeinstallprompt` and reveals the control, and hides itself when already running standalone. |
 
-`index.html` links the manifest, sets `<meta name="theme-color" content="#EAC81C">` and an
+`index.html` links the manifest, sets `<meta name="theme-color" content="#0B7D74">` and an
 `apple-touch-icon`. `src/main.js` wires it up:
 
 ```js
@@ -513,13 +537,13 @@ only and introduces no new colours.
 |---|---|---|
 | `--bg`, `--surface` | `#FFFFFF` | Page and card ground |
 | `--surface-2` | `#FAFAF8` | Table headers, column wells, assistant log |
-| `--hover` | `#FEFBEA` | Row and control hover |
+| `--hover` | `#EFF9F7` | Row and control hover |
 | `--ink` / `--ink-2` / `--muted` / `--faint` | `#17181A` / `#2E3033` / `#5A5F66` / `#686E75` | Text scale |
 | `--line` / `--line-2` | `#E7E7E4` / `#D8D8D3` | Hairlines and control borders |
-| `--amber` / `--amber-fill` | `#EAC81C` | Brand fill — buttons, bars, active states, the launcher |
-| `--on-amber` | `#17181A` | Text on any amber fill |
-| `--amber-deep` | `#8A6D00` | Amber-family text on white, where the fill colour would fail contrast |
-| `--amber-soft` / `--amber-line` | `#FEF9DA` / `#F0DE8C` | Active nav, selected plan, About button, unread notification |
+| `--amber` / `--amber-fill` | `#0B7D74` | Brand fill — buttons, bars, active states, the launcher |
+| `--on-amber` | `#FFFFFF` | Text on the accent fill (5.00:1) |
+| `--amber-deep` / `--amber-darker` | `#0A6156` / `#06463E` | Accent text on white, where the fill would be too light to read |
+| `--amber-soft` / `--amber-line` | `#D8F1ED` / `#93D2C9` | Active nav, selected plan, About button, unread notification |
 | `--ok` / `--warn` / `--bad` / `--info` | `#1E7A4B` / `#9A6400` / `#B3261E` / `#1F5C9E` | Status, each with a `-soft` ground and `-line` border |
 | `--r-lg` / `--r` / `--r-sm` / `--r-xs` | `12` / `8` / `6` / `4` px | Radius scale |
 | `--sans` | Inter | Interface text |
@@ -529,14 +553,12 @@ only and introduces no new colours.
 | `--night` / `--night-2` | `#17181A` / `#222427` | The single dark control: the `nasvih.in` link ground and its hover |
 
 `app.css` also carries a `[data-theme="dark"]` block that redefines the ground, ink, hairline and
-status tokens. `--amber-fill` and `--on-amber` are deliberately **not** redefined: the brand yellow
-is the same colour in both schemes and always carries ink text. `assets/opsboard.css` adds no new
-colours in dark either, with one exception — `#FFFFFF` for the chips that sit on the yellow sidebar,
-where the light theme used `--bg` and the dark value would have been near-black under ink text.
+status tokens. `--amber-fill` and `--on-amber` are deliberately **not** redefined: the accent fill
+is the same colour in both schemes and always carries white text.
 
 Rules the app holds to: solid fills only — no gradient, no blur, no glow shadow, no emoji as an
-icon. Yellow is always a *fill* with ink text on it, never yellow text on white and never white text
-on yellow. Icons are inline stroke SVG using `currentColor`, drawn from `ICONS` in `lib/ui.js`; the
+icon. The accent is always a *fill* with white text on it, or one of `--amber-deep` /
+`--amber-darker` as text on white — never the fill colour as text. Icons are inline stroke SVG using `currentColor`, drawn from `ICONS` in `lib/ui.js`; the
 one exception is the arrow-out-of-box glyph on the `nasvih.in` link, written inline in `src/main.js`
 in the same 20×20 stroke style because the shared set has no external-link icon.
 
@@ -563,7 +585,7 @@ For the installable side, in the browser:
    is non-null and the cache holds one entry per `SHELL` path.
 3. **Offline** — stop the server, reload: the shell, the workspace and every screen still render, and
    the console stays clean.
-4. **Sidebar** — a fresh profile shows the yellow sidebar with `aria-pressed="true"` on the
+4. **Sidebar** — a fresh profile shows the accent sidebar with `aria-pressed="true"` on the
    *Sidebar colour* control in the brand row; switching it off, reloading, switching it back and
    reloading again both persist, as does the rail.
 5. **390px** — every screen with no horizontal page scroll, in both colour schemes.
@@ -572,7 +594,7 @@ For the installable side, in the browser:
 7. **Phone preview** — the frame loads the app, the framed copy has no device switch of its own,
    and *Back to desktop* or `Esc` returns.
 8. **Dark mode** — toggling sets `data-theme` and persists; a fresh profile follows the operating
-   system; the yellow sidebar keeps ink text in both schemes.
+   system; the accent sidebar keeps white text in both schemes.
 9. **Copilot actions** — each of the six proposes before it writes, refuses an ambiguous reference,
    reports before → after, and the change is on the screen behind the panel and survives a reload.
 

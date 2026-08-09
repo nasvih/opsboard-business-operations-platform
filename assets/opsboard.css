@@ -7,9 +7,44 @@
    10 topbar controls · 11 notifications · 12 phone preview · 13 dark mode
    ============================================================ */
 
+/* == 0. accent ==
+   Opsboard's accent is a deep green-cyan. The shared kit ships one yellow and
+   names its slots --amber-*; the names stay — the kit and every app still point
+   at the same slots — and only the values move here.
+
+   The kit's yellow is a light fill that carries ink text. #0B7D74 is a dark
+   fill, so the pairing flips: --on-amber is white (5.00:1 on the fill; ink
+   would be 3.55:1). --amber-deep is the readable shade on white (7.35:1) and
+   holds 6.20:1 on --amber-soft; --amber-darker is the heavier one (10.75:1).
+   --hover is the accent's own tint, so it moves with it.
+
+   Held clear of --ok (#1E7A4B): the accent sits at 175° against the green's
+   152°, and its tint is the more saturated of the two, so a selected row and a
+   paid pill stay tellable apart. Solid colours only, as in the kit. */
+:root{
+  --hover:#EFF9F7;
+  --amber:#0B7D74;       --amber-deep:#0A6156;   --amber-darker:#06463E;
+  --amber-fill:#0B7D74;  --amber-fill-hi:#096A63;
+  --amber-soft:#D8F1ED;  --amber-line:#93D2C9;   --on-amber:#FFFFFF;
+}
+/* the four the kit re-declares for the dark palette, re-declared again. The
+   fill itself does not change between schemes — white on it is 5.00:1 either
+   way — so only the tint, the hairline and the two text shades move. */
+[data-theme="dark"]{
+  --hover:#16302C;
+  --amber-soft:#0E2B28;  --amber-line:#20514A;
+  /* pulled a few degrees further round than the light shade: in this scheme
+     --ok lifts to #5FCB97, and a mint and a cyan that close together in a
+     10px pill are not worth the risk */
+  --amber-deep:#45D9D0;  --amber-darker:#85E8E0;
+}
+/* text selection: the kit pins ink on its yellow; on this fill it is white */
+::selection{background:var(--amber-fill);color:var(--on-amber)}
+
 /* == 1. shell extras == */
-/* the skip link lands on top of the sidebar, which is yellow by default, so it
-   carries an ink edge and an ink focus ring instead of disappearing into it */
+/* the skip link lands on top of the sidebar, which wears the accent by
+   default, so it carries an ink edge and an ink focus ring instead of
+   disappearing into it */
 .skiplink{position:absolute;left:-9999px;top:0;z-index:100;background:var(--amber-fill);color:var(--on-amber);
   padding:10px 16px;border:2px solid var(--ink);border-radius:0 0 var(--r) 0;font-weight:600}
 .skiplink:focus{left:0}
@@ -37,9 +72,9 @@
 .about__say{font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
 .about__does{font-size:13px;line-height:1.45}
 
-/* Rail mode and the yellow tone come from app.css. Below are the pieces the
+/* Rail mode and the accent tone come from app.css. Below are the pieces the
    shared kit does not know about — this app's workspace switcher, the footer
-   note and the footer controls — plus the corrections the yellow sidebar needs
+   note and the footer controls — plus the corrections the accent sidebar needs
    now that it is the default. Colours are the kit's own tokens throughout. */
 .shell.is-rail .wsw{padding:10px 8px}
 .shell.is-rail .wsw__label,
@@ -47,29 +82,80 @@
 .shell.is-rail .wsw__chev,
 .shell.is-rail .side__note{display:none}
 .shell.is-rail .wsw__btn{justify-content:center;padding:8px 0}
-.side[data-tone="amber"] .wsw{border-color:rgba(23,24,26,.16)}
-.side[data-tone="amber"] .wsw__btn{background:rgba(255,255,255,.72);border-color:rgba(23,24,26,.18);color:var(--ink)}
-.side[data-tone="amber"] .wsw__btn:hover{background:var(--bg);border-color:rgba(23,24,26,.28)}
-.side[data-tone="amber"] .avatar--amber{background:var(--ink);color:var(--amber-fill)}
 
-/* Secondary text: #6B5400 clears 4.4:1 on #EAC81C, short of the 4.5:1 these
-   10–12px mono labels need, so on yellow they step up to --ink-2 (8:1). The
-   kit does this for its own labels; these two are this app's. */
+/* ---- the accent sidebar ----
+   The kit wrote this subtree for a light yellow fill: ink text, near-white
+   chips, ink hairlines, and a dark-mode block that re-pins the whole palette
+   back to light because the yellow stays light in both schemes. This accent is
+   a dark fill, so all of that inverts — white text, chips that go darker than
+   the fill rather than lighter, white hairlines — and it is the same in both
+   schemes, so these rules are written once and the kit's dark-mode re-pin is
+   put back to the dark palette below rather than being worked around.
+
+   White on #0B7D74 is 5.00:1. The 10–12px mono labels drop to #F0F8F7, which
+   is 4.64:1 — still over AA — so quiet text stays quiet without going under. */
+[data-theme="dark"] .side[data-tone="amber"]{
+  --ink:#F2F2F0; --ink-2:#D7D8DA; --muted:#A2A8B0; --faint:#8E959D;
+  --bg:#141517; --surface:#191A1D; --surface-2:#1F2124;
+  --line:#2C2E32; --line-2:#3A3D42; --hover:#16302C;
+  --amber-deep:#4FD8C4; --amber-darker:#86E6D6;
+}
+/* primary text and icons on the fill */
+.side[data-tone="amber"] .side__name,
+.side[data-tone="amber"] .navlink,
+.side[data-tone="amber"] .navlink svg,
+.side[data-tone="amber"] .wsw__name{color:#FFFFFF}
+/* the quiet mono labels */
+.side[data-tone="amber"] .side__tag,
+.side[data-tone="amber"] .navgroup__label,
+.side[data-tone="amber"] .navlink__count,
 .side[data-tone="amber"] .wsw__label,
-.side[data-tone="amber"] .side__note{color:var(--ink-2)}
+.side[data-tone="amber"] .wsw__sub,
+.side[data-tone="amber"] .wsw__chev,
+.side[data-tone="amber"] .side__note{color:#F0F8F7}
+/* the workspace popover is the one thing in here that is not painted on the
+   fill — it is a panel on the page surface, so it takes the page's own text
+   colours back off the tokens rather than the light-on-dark set above */
+.side[data-tone="amber"] .wsw__list .wsw__name{color:var(--ink)}
+.side[data-tone="amber"] .wsw__list .wsw__sub,
+.side[data-tone="amber"] .wsw__list .wsw__opt:not(.is-on) .wsw__chev{color:var(--faint)}
+/* hairlines lift off the fill instead of cutting into it */
+.side[data-tone="amber"] .side__brand,
+.side[data-tone="amber"] .side__foot,
+.side[data-tone="amber"] .wsw,
+.side[data-tone="amber"] .navgroup+.navgroup{border-color:rgba(255,255,255,.24)}
+/* a hover darkens the fill; the selected screen stays the white chip the kit
+   drew, with the accent's own heavy shade on it (10.75:1) */
+.side[data-tone="amber"] .navlink:hover{background:rgba(23,24,26,.10)}
+.side[data-tone="amber"] .navlink.is-active{background:#FFFFFF;color:#06463E}
+.side[data-tone="amber"] .navlink.is-active svg,
+.side[data-tone="amber"] .navlink.is-active .navlink__count{color:#0A6156}
+/* the focus ring: the kit's ink ring is only 4.1:1 on this fill, white is 5:1 */
+.side[data-tone="amber"] :focus-visible{outline-color:#FFFFFF}
+/* the two white marks keep their shape and swap which side is which */
+.side[data-tone="amber"] .mark,
+.side[data-tone="amber"] .avatar--amber{background:#FFFFFF;color:var(--amber-fill)}
+/* Chips on a dark fill go darker, not lighter: white on a 18%-ink chip is
+   6.36:1, where the kit's 72%-white chip would have left white on near-white. */
+.side[data-tone="amber"] .btn,
+.side[data-tone="amber"] .wsw__btn,
+.side[data-tone="amber"] .side__brandbtns .btn{background:rgba(23,24,26,.18);border-color:rgba(255,255,255,.30);color:#FFFFFF}
+.side[data-tone="amber"] .btn:hover,
+.side[data-tone="amber"] .wsw__btn:hover,
+.side[data-tone="amber"] .side__brandbtns .btn:hover{background:rgba(23,24,26,.30);border-color:rgba(255,255,255,.42)}
 
-/* A ghost button sitting on yellow inherits the solid footer button style and
+/* A ghost button sitting on the fill inherits the solid footer button style and
    loses its rank, so it is given back a quieter, outline-only treatment. */
-.side[data-tone="amber"] .btn--ghost{background:transparent;border-color:rgba(23,24,26,.22)}
-.side[data-tone="amber"] .btn--ghost:hover{background:var(--bg);border-color:rgba(23,24,26,.28)}
+.side[data-tone="amber"] .btn--ghost{background:transparent;border-color:rgba(255,255,255,.30)}
+.side[data-tone="amber"] .btn--ghost:hover{background:rgba(23,24,26,.30);border-color:rgba(255,255,255,.42)}
 
 /* The two brand-row controls carry no text, so their pressed state has to be
-   visible and not only announced through aria-pressed. On yellow the pressed
-   one becomes a solid white chip with an ink edge — the dark treatment is
-   reserved for the one link that leaves the app. */
+   visible and not only announced through aria-pressed. On the fill the pressed
+   one becomes a solid white chip — the dark treatment is reserved for the one
+   link that leaves the app. */
 .side__brandbtns .btn[aria-pressed="true"]{background:var(--amber-soft);border-color:var(--amber);color:var(--ink)}
 .side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"],
-.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:var(--bg);border-color:var(--ink);color:var(--ink)}
+.side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:#FFFFFF;border-color:#FFFFFF;color:#06463E}
 
 /* The author's site — the single dark control in the sidebar, so it reads as
    an exit whichever colour the sidebar is wearing. */
@@ -244,13 +330,14 @@
 
 /* == 12. phone preview ==
    The app inside an iframe of itself at 390x844, so its own breakpoints do
-   the work. Yellow surround, ink text on it, dark bezel around the screen. */
+   the work. Accent surround, white text on it, dark bezel around the screen. */
 .stage{position:fixed;inset:0;z-index:90;background:var(--amber-fill);color:var(--on-amber);
   display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;overflow:auto}
 .stage__bar{display:flex;align-items:center;gap:16px;width:min(760px,100%);justify-content:space-between;flex:none}
 .stage__name{font-weight:700;font-size:17px;letter-spacing:-.02em}
 .stage__size{color:var(--on-amber)}
-.stage :focus-visible{outline-color:var(--ink)}
+/* the ring is white for the same reason the sidebar's is: ink is 4.1:1 here */
+.stage :focus-visible{outline-color:#FFFFFF}
 .phone{position:relative;flex:none;background:var(--night);border-radius:38px;padding:12px;
   transform-origin:top center}
 .phone__notch{position:absolute;left:50%;margin-left:-48px;top:4px;width:96px;height:5px;
@@ -327,43 +414,15 @@ body.is-staged .assist-fab,body.is-staged .assist,body.is-staged .toasts{display
 }
 
 /* == 13. dark mode ==
-   The palette flips in app.css. What is left here is everything this app
-   paints on the brand yellow: the yellow does not change between schemes, so
-   anything sitting on it keeps ink text rather than the themed --ink. */
+   The palette flips in app.css. The accent sidebar needs nothing here: its
+   fill is dark in both schemes, so the light-on-dark rules in section 1 are
+   already right and the kit's dark-mode re-pin of that subtree is undone
+   there too. What is left is the two corrections below. */
 html[data-theme="dark"]{color-scheme:dark}
 
 /* the shared select chevron is drawn with a light-mode grey */
 [data-theme="dark"] .select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23A2A8B0' stroke-width='1.7'%3E%3Cpath d='M6 8l4 4 4-4'/%3E%3C/svg%3E")}
 
-/* text on the yellow sidebar */
-[data-theme="dark"] .side[data-tone="amber"] .side__name,
-[data-theme="dark"] .side[data-tone="amber"] .side__tag,
-[data-theme="dark"] .side[data-tone="amber"] .navgroup__label,
-[data-theme="dark"] .side[data-tone="amber"] .navlink,
-[data-theme="dark"] .side[data-tone="amber"] .navlink svg,
-[data-theme="dark"] .side[data-tone="amber"] .navlink__count,
-[data-theme="dark"] .side[data-tone="amber"] .wsw__label,
-[data-theme="dark"] .side[data-tone="amber"] .wsw__name,
-[data-theme="dark"] .side[data-tone="amber"] .wsw__sub,
-[data-theme="dark"] .side[data-tone="amber"] .side__note,
-[data-theme="dark"] .side[data-tone="amber"] .wsw__btn,
-[data-theme="dark"] .side[data-tone="amber"] .btn{color:var(--on-amber)}
-/* the selected screen stays an inverted chip, so its text goes back to light */
-[data-theme="dark"] .side[data-tone="amber"] .navlink.is-active{color:var(--ink)}
-[data-theme="dark"] .side[data-tone="amber"] .navlink.is-active svg{color:var(--amber-deep)}
-/* white chips, not near-black ones, wherever the light theme used --bg */
-[data-theme="dark"] .side[data-tone="amber"] .btn:hover,
-[data-theme="dark"] .side[data-tone="amber"] .btn--ghost:hover,
-[data-theme="dark"] .side[data-tone="amber"] .wsw__btn:hover,
-[data-theme="dark"] .side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"],
-[data-theme="dark"] .side[data-tone="amber"] .side__brandbtns .btn[aria-pressed="true"]:hover{background:#FFFFFF;color:var(--on-amber)}
-/* the two ink-filled marks invert with the palette, which puts a pale block
-   on the yellow — pin them back to ink */
-[data-theme="dark"] .side[data-tone="amber"] .mark,
-[data-theme="dark"] .side[data-tone="amber"] .avatar--amber{background:var(--on-amber);color:var(--amber-fill)}
-/* the one dark control keeps its white text */
-[data-theme="dark"] .side[data-tone="amber"] .btn--site,
-[data-theme="dark"] .side[data-tone="amber"] .btn--site:hover{color:#fff}
 /* solid status fills carry dark text in this scheme */
 [data-theme="dark"] .toast--ok,[data-theme="dark"] .toast--bad,
 [data-theme="dark"] .bellbadge{color:var(--night)}

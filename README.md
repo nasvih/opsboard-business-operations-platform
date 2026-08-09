@@ -109,9 +109,10 @@ seed and throws away every edit.
 
 Two icon-only controls sit on the brand row at the top of the sidebar, right of the app name.
 
-The navigation is **brand yellow by default**. The right-hand control — a circle half filled —
-switches between the yellow sidebar and a plain white one. It names no colour: it is labelled
-*Sidebar colour* for screen readers and reports the yellow tone through `aria-pressed`. Whichever
+The navigation wears the **brand accent by default** — a deep green-cyan, `#0B7D74`. The
+right-hand control — a circle half filled — switches between the accent sidebar and a plain
+white one. It names no colour: it is labelled *Sidebar colour* for screen readers and reports
+the accent tone through `aria-pressed`. Whichever
 you pick is remembered in `localStorage` and used on every later visit.
 
 Beside it, the panel-and-chevron control shrinks the sidebar to a 64px icon rail (*Collapse
@@ -132,10 +133,10 @@ Right of the page title sit three icon-only controls and the demo notice. Each h
 | Control | What it does |
 |---|---|
 | **Notifications** (bell) | A panel built from this workspace's own records: invoices past due, deals reaching their close date inside a week or already past it, a plan running out of seats, and what the team changed in the last three days. The badge counts the unread ones. Mark one read, or all of them; clicking an item marks it read and opens the screen it belongs to. Read marks persist. Switch workspace and the list re-scopes with everything else. |
-| **Device preview** (phone / desktop) | Phone mode renders the app inside a 390 × 844 iframe of itself, in a dark bezel on a yellow surround, with the app's name above it and a **Back to desktop** control. It is an iframe rather than a scaled picture, so the real breakpoints apply. The framed copy hides the device switch and does not register the service worker a second time. `Esc` returns to the desktop. The control is hidden below 900px — you are already there. |
-| **Dark mode** (moon / sun) | Sets `data-theme="dark"` on the page and remembers it. On a first visit it follows the operating system. The brand yellow does not change between schemes: it stays a fill with ink text on it. |
+| **Device preview** (phone / desktop) | Phone mode renders the app inside a 390 × 844 iframe of itself, in a dark bezel on an accent surround, with the app's name above it and a **Back to desktop** control. It is an iframe rather than a scaled picture, so the real breakpoints apply. The framed copy hides the device switch and does not register the service worker a second time. `Esc` returns to the desktop. The control is hidden below 900px — you are already there. |
+| **Dark mode** (moon / sun) | Sets `data-theme="dark"` on the page and remembers it. On a first visit it follows the operating system. The brand accent fill does not change between schemes: it stays a fill with white text on it — only its tint, hairline and text shades move. |
 
-**About this demo** — the amber button at the far right — opens the About modal, which includes
+**About this demo** — the accent-tinted button at the far right — opens the About modal, which includes
 worked examples of everything the copilot can change.
 
 ### Opsboard Copilot
@@ -201,7 +202,7 @@ with no browser chrome.
   the data was always local, so every screen still renders and every flow still runs.
 
 `manifest.webmanifest` describes the app (name, `./` start URL and scope so it works from a project
-subpath, standalone display, white background, `#EAC81C` theme colour, three icons). `sw.js` holds
+subpath, standalone display, white background, `#0B7D74` theme colour, three icons). `sw.js` holds
 the explicit list of files to cache — **if you add or rename a file, add it to `SHELL` and bump
 `CACHE_VERSION`**, otherwise installed copies keep serving the old version.
 
@@ -225,7 +226,7 @@ without any configuration.
 | `lib/pwa.js` | Registers the service worker and drives the "Install app" control, including the iOS instructions. Unmodified. |
 | `assets/icons/*.png` | App icons: 192, 512 and a maskable 512. |
 | `assets/app.css` | Shared design system: tokens, shell, buttons, tables, forms, modal, assistant. Unmodified. |
-| `assets/opsboard.css` | App-specific components only: workspace switcher, filter bar, pipeline board, aging rows, role matrix, plan picker, notification panel, phone preview, and the dark-mode corrections for anything sitting on the brand yellow. |
+| `assets/opsboard.css` | App-specific components only: workspace switcher, filter bar, pipeline board, aging rows, role matrix, plan picker, notification panel, phone preview, the accent token values that override the kit's yellow, and the light-on-dark treatment for everything sitting on the accent fill. |
 | `lib/ui.js` | DOM helpers, formatting, seeded random, `localStorage` store, hash router, toast, modal, CSV export, bar chart, icons. |
 | `lib/assistant.js` | The offline assistant engine: intent routing, word-by-word streaming, tables and traces. |
 | `src/main.js` | Boot: builds the shell, workspace switcher, navigation, topbar controls (notifications, device preview, dark mode), router, keyboard shortcuts, mounts the copilot. |

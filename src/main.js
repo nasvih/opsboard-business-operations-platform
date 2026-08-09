@@ -80,7 +80,7 @@ const THEME_ICON = {
 const FRAMED = new URLSearchParams(location.search).get('frame') === 'phone';
 
 /* The colour control never names a colour: the glyph carries it, and the
-   accessible name stays neutral while aria-pressed reports the yellow tone. */
+   accessible name stays neutral while aria-pressed reports the accent tone. */
 const TONE_LABEL = 'Sidebar colour';
 const railLabel = (railed) => (railed ? 'Expand sidebar' : 'Collapse sidebar');
 
@@ -108,7 +108,7 @@ const CHROME_KEY = 'opsboard.chrome.v1';
 /* the rail is a desktop idea; under 900px the sidebar is a drawer and stays one */
 const DESKTOP = window.matchMedia('(min-width:901px)');
 
-/* Brand yellow is the default navigation. A stored preference always wins —
+/* The brand accent is the default navigation. A stored preference always wins —
    including an explicit `false`, which is how the plain white sidebar is kept.
    `theme` is null until the reader chooses one, and null means "follow the
    operating system". `read` holds the notification ids already seen. */
@@ -167,8 +167,8 @@ DESKTOP.addEventListener('change', applyChrome);
 /* ---------- colour scheme ---------- */
 
 /* First visit follows the operating system; once the button is pressed the
-   choice is stored and the system is ignored. The yellow keeps ink text on it
-   in both schemes — that pairing is fixed, not themed. */
+   choice is stored and the system is ignored. The accent fill keeps white text
+   on it in both schemes — that pairing is fixed, not themed. */
 const DARKQ = window.matchMedia('(prefers-color-scheme:dark)');
 const isDark = () => chrome.theme === 'dark';
 
@@ -176,7 +176,7 @@ function applyTheme() {
   const dark = isDark();
   document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   const meta = qs('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#141517' : '#EAC81C');
+  if (meta) meta.setAttribute('content', dark ? '#141517' : '#0B7D74');
   const btn = qs('[data-tool="theme"]');
   if (btn) {
     const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
