@@ -13,8 +13,10 @@
 import { money, fmtDate, ago } from '../lib/ui.js';
 import {
   currencySymbol, overdueInvoices, invoiceAgeDays, customerName,
-  seatsUsed, openDeals, changesSince,
+  seatsUsed, openDeals, changesSince, stageLabel, planLabel,
+  dealTitle, activityText,
 } from './data.js';
+import { t } from './main.js';
 
 const cur = (ws, n) => money(n, currencySymbol(ws.currency));
 const days = (iso) => Math.round((new Date(iso).getTime() - Date.now()) / 86400000);
@@ -32,10 +34,10 @@ export function buildNotifications(ws) {
     const age = invoiceAgeDays(i);
     out.push({
       id: `inv:${i.id}`,
-      tag: 'Overdue',
+      tag: t('notify.tagOverdue'),
       kind: 'bad',
-      title: `${i.number} is ${age} ${age === 1 ? 'day' : 'days'} past due`,
-      line: `${customerName(ws, i.customerId)} owes ${cur(ws, i.amount)}. Chase it, or mark it paid when the money lands.`,
+      title: t('notify.invTitle', { number: i.number, n: age }),
+      line: t('notify.invLine', { name: customerName(ws, i.customerId), amount: cur(ws, i.amount) }),
       at: i.dueAt,
       nav: 'invoices',
       sort: 1000 + age,
@@ -45,10 +47,10 @@ export function buildNotifications(ws) {
     const rest = late.slice(3);
     out.push({
       id: `inv-more:${ws.id}:${late.length}`,
-      tag: 'Overdue',
+      tag: t('notify.tagOverdue'),
       kind: 'bad',
-      title: `${rest.length} more invoices are past due`,
-      line: `A further ${cur(ws, rest.reduce((t, i) => t + i.amount, 0))} sits behind the three above.`,
+      title: t('notify.invMoreTitle', { n: rest.length }),
+      line: t('notify.invMoreLine', { amount: cur(ws, rest.reduce((sum, i) => sum + i.amount, 0)) }),
       at: rest[0].dueAt,
       nav: 'invoices',
       sort: 900,
@@ -62,14 +64,17 @@ export function buildNotifications(ws) {
     .slice(0, 4)
     .forEach((d) => {
       const n = days(d.closeDate);
+      const title = dealTitle(ws, d);
       out.push({
         id: `deal:${d.id}`,
-        tag: n < 0 ? 'Slipping' : 'Closing',
+        tag: n < 0 ? t('notify.tagSlipping') : t('notify.tagClosing'),
         kind: n < 0 ? 'warn' : 'info',
         title: n < 0
-          ? `${d.title} passed its close date ${Math.abs(n)} ${Math.abs(n) === 1 ? 'day' : 'days'} ago`
-          : `${d.title} is due to close ${n === 0 ? 'today' : `in ${n} ${n === 1 ? 'day' : 'days'}`}`,
-        line: `${cur(ws, d.value)} at ${d.probability}% likely, ${d.owner} owns it. Currently in ${d.stage}.`,
+          ? t('notify.dealLate', { title, n: Math.abs(n) })
+          : t('notify.dealSoon', { title, n }),
+        line: t('notify.dealLine', {
+          amount: cur(ws, d.value), p: d.probability, owner: d.owner, stage: stageLabel(d.stage),
+        }),
         at: d.closeDate,
         nav: 'deals',
         sort: n < 0 ? 800 : 700 - n,
@@ -83,14 +88,12 @@ export function buildNotifications(ws) {
     const over = used > ws.seatsIncluded;
     out.push({
       id: `seats:${ws.id}:${used}/${ws.seatsIncluded}`,
-      tag: 'Seats',
+      tag: t('notify.tagSeats'),
       kind: over ? 'bad' : 'warn',
       title: over
-        ? `${used - ws.seatsIncluded} seats over the ${ws.plan} plan`
-        : `${ws.seatsIncluded - used} of ${ws.seatsIncluded} seats left`,
-      line: over
-        ? 'Change the plan in Settings, or remove access for someone who has left.'
-        : 'Invites count against the allowance as soon as they are sent.',
+        ? t('notify.seatsOver', { n: used - ws.seatsIncluded, plan: planLabel(ws.plan).toLowerCase() })
+        : t('notify.seatsLeft', { n: ws.seatsIncluded - used, total: ws.seatsIncluded }),
+      line: over ? t('notify.seatsOverLine') : t('notify.seatsLeftLine'),
       at: new Date().toISOString(),
       nav: 'team',
       sort: over ? 950 : 600,
@@ -101,10 +104,10 @@ export function buildNotifications(ws) {
   changesSince(ws, 3).slice(0, 4).forEach((a) => {
     out.push({
       id: `act:${a.id}`,
-      tag: 'Change',
+      tag: t('notify.tagChange'),
       kind: 'info',
-      title: a.text,
-      line: `${a.actor} · ${ago(a.at)}`,
+      title: activityText(a),
+      line: t('notify.changeLine', { actor: a.actor, when: ago(a.at) }),
       at: a.at,
       nav: ACTIVITY_SCREEN[a.type] || 'overview',
       sort: 500,
@@ -117,4 +120,4 @@ export function buildNotifications(ws) {
 }
 
 /* used for the "3 days ago" line under an item */
-export const notifWhen = (n) => (new Date(n.at) > new Date() ? `due ${fmtDate(n.at)}` : ago(n.at));
+export const notifWhen = (n) => (new Date(n.at) > new Date() ? t('notify.due', { date: fmtDate(n.at) }) : ago(n.at));

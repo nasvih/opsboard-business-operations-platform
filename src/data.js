@@ -6,20 +6,23 @@
    user changes something. Nothing is fetched from a network.
    ============================================================ */
 
-import { createStore, seeded, between, pick, daysFromNow } from '../lib/ui.js';
+import { createStore, seeded, between, pick, daysFromNow, dateLocale } from '../lib/ui.js';
+import { t } from './main.js';
 
 export const STORE_KEY = 'opsboard.state.v1';
 
 /* ---------- reference tables ---------- */
 
+/* Reference tables carry ids and numbers only. Every label is looked up when
+   it is drawn, so the same stored record reads in whichever language is on. */
 export const STAGES = [
-  { id: 'qualify', label: 'Qualify', open: true },
-  { id: 'proposal', label: 'Proposal', open: true },
-  { id: 'negotiation', label: 'Negotiation', open: true },
-  { id: 'won', label: 'Won', open: false },
-  { id: 'lost', label: 'Lost', open: false },
+  { id: 'qualify', open: true },
+  { id: 'proposal', open: true },
+  { id: 'negotiation', open: true },
+  { id: 'won', open: false },
+  { id: 'lost', open: false },
 ];
-export const stageLabel = (id) => (STAGES.find((s) => s.id === id) || { label: id }).label;
+export const stageLabel = (id) => t(`stages.${id}`);
 
 export const SEGMENTS = ['Retail', 'Wholesale', 'Institutional', 'Online', 'Government'];
 export const CUSTOMER_STATUS = ['active', 'at-risk', 'dormant'];
@@ -27,26 +30,48 @@ export const INVOICE_STATUS = ['draft', 'sent', 'overdue', 'paid'];
 export const ROLES = ['owner', 'admin', 'member', 'viewer'];
 
 export const PERMISSIONS = [
-  { id: 'view', label: 'View workspace data' },
-  { id: 'customers', label: 'Create and edit customers' },
-  { id: 'deals', label: 'Move deals between stages' },
-  { id: 'invoices', label: 'Issue and settle invoices' },
-  { id: 'team', label: 'Invite people and set roles' },
-  { id: 'billing', label: 'Change plan and billing' },
+  { id: 'view' }, { id: 'customers' }, { id: 'deals' },
+  { id: 'invoices' }, { id: 'team' }, { id: 'billing' },
 ];
+export const permLabel = (id) => t(`perms.${id}`);
 
 export const PLANS = [
-  { id: 'starter', label: 'Starter', seats: 8, priceInr: 2400 },
-  { id: 'growth', label: 'Growth', seats: 15, priceInr: 5900 },
-  { id: 'scale', label: 'Scale', seats: 25, priceInr: 11500 },
+  { id: 'starter', seats: 8, priceInr: 2400 },
+  { id: 'growth', seats: 15, priceInr: 5900 },
+  { id: 'scale', seats: 25, priceInr: 11500 },
 ];
+export const planLabel = (id) => t(`plans.${id}`);
 
+/* The symbol and the code are data, not language: SAR reads SAR in both. */
 export const CURRENCIES = [
-  { id: 'INR', symbol: '₹', label: 'Indian rupee' },
-  { id: 'SAR', symbol: 'SAR ', label: 'Saudi riyal' },
-  { id: 'AED', symbol: 'AED ', label: 'UAE dirham' },
+  { id: 'INR', symbol: '₹' },
+  { id: 'SAR', symbol: 'SAR ' },
+  { id: 'AED', symbol: 'AED ' },
 ];
 export const currencySymbol = (id) => (CURRENCIES.find((c) => c.id === id) || CURRENCIES[0]).symbol;
+export const currencyLabel = (id) => t(`currencies.${id}`);
+
+export const roleLabel = (id) => t(`roles.${id}`);
+export const statusLabel = (id) => t(`statuses.${id}`);
+export const segmentLabel = (id) => t(`segments.${id}`);
+export const monthLabel = (id) => t(`months.${id}`);
+
+/* The seed stores a key for the trade a workspace is in; a workspace somebody
+   renamed on the Settings screen stores the words they typed. Both go through
+   here, and anything that is not a key comes back exactly as it was written.
+   The three English sentences are read as keys too, so a workspace generated
+   before this dictionary existed still reads Arabic. */
+const INDUSTRY_KEY = {
+  'Industrial distribution': 'industrial',
+  'Food processing': 'food',
+  'Facilities management': 'facilities',
+};
+export function industryLabel(value) {
+  const key = INDUSTRY_KEY[value] || value;
+  const word = t(`data.industries.${key}`);
+  return word === `data.industries.${key}` ? value : word;
+}
+export const FISCAL_MONTHS = ['January', 'April', 'July', 'October'];
 
 const defaultMatrix = () => ({
   owner: { view: true, customers: true, deals: true, invoices: true, team: true, billing: true },
@@ -62,7 +87,7 @@ const BOOK = {
     name: 'Northline Traders',
     short: 'NT',
     city: 'Kochi',
-    industry: 'Industrial distribution',
+    industry: 'industrial',
     plan: 'growth',
     seed: 10714,
     domain: 'northlinetraders.example',
@@ -80,7 +105,7 @@ const BOOK = {
     name: 'Kerala Coast Foods',
     short: 'KC',
     city: 'Alappuzha',
-    industry: 'Food processing',
+    industry: 'food',
     plan: 'scale',
     seed: 22447,
     domain: 'keralacoastfoods.example',
@@ -98,7 +123,7 @@ const BOOK = {
     name: 'Jeddah Facilities Co',
     short: 'JF',
     city: 'Jeddah',
-    industry: 'Facilities management',
+    industry: 'facilities',
     plan: 'starter',
     seed: 33195,
     domain: 'jeddahfacilities.example',
@@ -116,27 +141,56 @@ const BOOK = {
 
 export const WORKSPACE_IDS = Object.keys(BOOK);
 
-const DEAL_KINDS = ['annual supply contract', 'quarterly restock', 'pilot rollout', 'renewal', 'branch expansion',
-  'service upgrade', 'bulk order', 'maintenance retainer', 'seasonal programme', 'replacement fleet'];
+/* The seed stores keys, never sentences: a workspace generated in English
+   still reads Arabic after the switch, because nothing in storage is a
+   language. Anything the user types is stored as they typed it. */
+const DEAL_KINDS = ['annual', 'restock', 'pilot', 'renewal', 'branch',
+  'upgrade', 'bulk', 'retainer', 'seasonal', 'fleet'];
 
-const NOTE_LINES = [
-  'Asked for a revised payment window of 45 days.',
-  'Warehouse visit done, stock rotation looks healthy.',
-  'Two invoices queried, both were duplicates of the same delivery note.',
-  'Wants a single monthly statement instead of per-order bills.',
-  'New purchase officer joined, introductions scheduled.',
-  'Volumes dropped after their second branch closed.',
-  'Happy with turnaround time, mentioned it unprompted.',
-  'Credit limit review due before the next quarter.',
-];
+const NOTE_KEYS = ['n1', 'n2', 'n3', 'n4', 'n5', 'n6', 'n7', 'n8'];
 
 const ACTIVITY_KINDS = [
-  { type: 'deal', text: (n) => `Deal moved to Proposal — ${n}` },
-  { type: 'invoice', text: (n) => `Invoice issued to ${n}` },
-  { type: 'customer', text: (n) => `Customer record updated — ${n}` },
-  { type: 'team', text: (n) => `Access reviewed for ${n}` },
-  { type: 'note', text: (n) => `Call logged with ${n}` },
+  { type: 'deal', key: 'seedDeal' },
+  { type: 'invoice', key: 'seedInvoice' },
+  { type: 'customer', key: 'seedCustomer' },
+  { type: 'team', key: 'seedTeam' },
+  { type: 'note', key: 'seedNote' },
 ];
+
+/* ---------- reading a stored record back out as language ---------- */
+
+/* A note the user wrote is kept verbatim; a seeded one is a key. */
+export const noteText = (n) => (n && n.text ? n.text : t(`data.notes.${n.key}`));
+
+/* Activity lines carry a key and the pieces that fill it. Ids inside those
+   pieces — a stage, a role, a status, a permission — are resolved here so the
+   sentence is whole in the reading language. */
+export function activityText(a) {
+  if (!a) return '';
+  if (a.text) return a.text;                       // written before this version
+  const v = { ...(a.vars || {}) };
+  if (v.stage) v.stage = stageLabel(v.stage);
+  if (v.role) v.role = roleLabel(v.role);
+  if (v.status) v.status = statusLabel(v.status);
+  if (v.segment) v.segment = segmentLabel(v.segment);
+  if (v.perm) v.perm = permLabel(v.perm);
+  if (v.plan) v.plan = planLabel(v.plan);
+  if (v.titleOf) v.title = dealTitleById(v.wsId, v.titleOf);
+  return t(`data.activity.${a.key}`, v);
+}
+
+/* A seeded deal is "account — kind of work"; a deal somebody typed keeps the
+   title they gave it. */
+export function dealTitle(ws, d) {
+  if (!d) return '';
+  if (d.title) return d.title;
+  return `${customerName(ws, d.customerId)} — ${t(`data.dealKinds.${d.kindKey}`)}`;
+}
+const dealTitleById = (wsId, dealId) => {
+  const ws = store.state.workspaces[wsId];
+  const d = ws && ws.deals.find((x) => x.id === dealId);
+  return d ? dealTitle(ws, d) : '';
+};
 
 const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
 const emailFor = (person, domain) => `${slug(person.split(' ')[0])}@${domain}`;
@@ -174,7 +228,7 @@ function genWorkspace(wsId) {
         id: `${wsId}-c${i + 1}-n${n + 1}`,
         at: daysFromNow(-between(2, 120, rnd)).toISOString(),
         by: pick(activeOwners, rnd),
-        text: pick(NOTE_LINES, rnd),
+        key: pick(NOTE_KEYS, rnd),
       });
     }
     notes.sort((a, c) => new Date(c.at) - new Date(a.at));
@@ -205,7 +259,7 @@ function genWorkspace(wsId) {
     deals.push({
       id: `${wsId}-d${i + 1}`,
       ws: wsId,
-      title: `${cust.name} — ${pick(DEAL_KINDS, rnd)}`,
+      kindKey: pick(DEAL_KINDS, rnd),
       customerId: cust.id,
       stage,
       value: between(6, 120, rnd) * 10000,
@@ -262,7 +316,8 @@ function genWorkspace(wsId) {
       at: daysFromNow(-between(0, 20, rnd)).toISOString(),
       type: kind.type,
       actor: pick(activeOwners, rnd),
-      text: kind.text(subject),
+      key: kind.key,
+      vars: { n: subject },
     });
   }
   activity.sort((a, c) => new Date(c.at) - new Date(a.at));
@@ -308,7 +363,7 @@ export function setWorkspace(id) {
   store.update((s) => { if (s.workspaces[id]) s.activeWs = id; });
 }
 
-export function logActivity(wsId, type, text, actor) {
+export function logActivity(wsId, type, key, vars, actor) {
   store.update((s) => {
     const ws = s.workspaces[wsId];
     if (!ws) return;
@@ -318,14 +373,15 @@ export function logActivity(wsId, type, text, actor) {
       at: new Date().toISOString(),
       type,
       actor: actor || s.user.name,
-      text,
+      key,
+      vars: vars || {},
     });
     ws.activity = ws.activity.slice(0, 60);
   });
 }
 
 export const customerById = (ws, id) => ws.customers.find((c) => c.id === id) || null;
-export const customerName = (ws, id) => (customerById(ws, id) || { name: 'Unknown account' }).name;
+export const customerName = (ws, id) => (customerById(ws, id) || { name: t('customers.unknown') }).name;
 
 export const openDeals = (ws) => ws.deals.filter((d) => d.stage !== 'won' && d.stage !== 'lost');
 export const pipelineValue = (ws) => openDeals(ws).reduce((t, d) => t + d.value, 0);
@@ -339,12 +395,7 @@ export function invoiceAgeDays(inv) {
 }
 
 export function agingBuckets(ws) {
-  const buckets = [
-    { id: 'current', label: 'Not due', total: 0, count: 0 },
-    { id: 'b1', label: '1–30 days', total: 0, count: 0 },
-    { id: 'b2', label: '31–60 days', total: 0, count: 0 },
-    { id: 'b3', label: '60+ days', total: 0, count: 0 },
-  ];
+  const buckets = ['current', 'b1', 'b2', 'b3'].map((id) => ({ id, label: t(`aging.${id}`), total: 0, count: 0 }));
   ws.invoices.filter((i) => i.status === 'sent' || i.status === 'overdue').forEach((i) => {
     const age = invoiceAgeDays(i);
     const b = i.status === 'sent' && age === 0 ? buckets[0] : age <= 30 ? buckets[1] : age <= 60 ? buckets[2] : buckets[3];
@@ -360,7 +411,7 @@ export function monthKeys(count = 6) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     out.push({
       key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-      label: d.toLocaleDateString('en-GB', { month: 'short' }),
+      label: d.toLocaleDateString(dateLocale(), { month: 'short' }),
       year: d.getFullYear(),
     });
   }
@@ -382,7 +433,7 @@ export function quarterBounds(d = new Date()) {
   const q = Math.floor(d.getMonth() / 3);
   const from = new Date(d.getFullYear(), q * 3, 1);
   const to = new Date(d.getFullYear(), q * 3 + 3, 0, 23, 59, 59);
-  return { from, to, label: `Q${q + 1} ${d.getFullYear()}` };
+  return { from, to, label: t('quarter', { q: q + 1, y: d.getFullYear() }) };
 }
 
 export function quarterRevenue(ws) {
@@ -405,11 +456,11 @@ export function atRiskCustomers(ws) {
   return ws.customers
     .map((c) => {
       const reasons = [];
-      if (c.status === 'at-risk') reasons.push('flagged at risk');
-      if (c.status === 'dormant') reasons.push('dormant account');
-      if (overdueBy[c.id]) reasons.push('overdue invoices');
+      if (c.status === 'at-risk') reasons.push(t('data.risk.flagged'));
+      if (c.status === 'dormant') reasons.push(t('data.risk.dormant'));
+      if (overdueBy[c.id]) reasons.push(t('data.risk.overdue'));
       const idle = Math.round((Date.now() - new Date(c.lastOrder).getTime()) / 86400000);
-      if (idle > 90) reasons.push(`no order in ${idle} days`);
+      if (idle > 90) reasons.push(t('data.risk.idle', { n: idle }));
       return { customer: c, reasons, overdue: overdueBy[c.id] || 0, idle };
     })
     .filter((r) => r.reasons.length)

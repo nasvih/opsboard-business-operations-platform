@@ -3,7 +3,9 @@
 import { h, fmtDate, ago, modal, toast, downloadCSV, on } from '../../lib/ui.js';
 import {
   store, SEGMENTS, CUSTOMER_STATUS, logActivity, stageLabel, invoiceAgeDays,
+  segmentLabel, statusLabel, noteText, dealTitle,
 } from '../data.js';
+import { t } from '../main.js';
 import {
   pageHead, statusPill, searchBox, selectFilter, openDrawer, defList,
   emptyState, wsMoney, iconEl,
@@ -28,30 +30,30 @@ export function render(ctx) {
   const money = (n) => wsMoney(ws, n);
   const root = h('div', { class: 'view view--pad' });
 
-  root.appendChild(pageHead('Customers',
-    `${ws.customers.length} accounts in ${ws.name}. Search, filter, then open a row for contacts, notes and linked deals.`,
+  root.appendChild(pageHead(t('customers.title'),
+    t('customers.sub', { n: ws.customers.length, name: ws.name }),
     [
       h('button', {
         class: 'btn',
         onclick: () => {
-          const rows = [['Account', 'Segment', 'Owner', 'Status', 'Contact', 'Email', 'Phone', 'Lifetime value']];
-          list.forEach((c) => rows.push([c.name, c.segment, c.owner, c.status, c.contactName, c.contactEmail, c.contactPhone, customerValue(ws, c)]));
+          const rows = [t('customers.csvHead')];
+          list.forEach((c) => rows.push([c.name, segmentLabel(c.segment), c.owner, statusLabel(c.status), c.contactName, c.contactEmail, c.contactPhone, customerValue(ws, c)]));
           downloadCSV(`opsboard-customers-${ws.id}.csv`, rows);
-          toast('Customer list exported as CSV', 'ok');
+          toast(t('customers.exported'), 'ok');
         },
-      }, iconEl('download'), 'Export CSV'),
-      h('button', { class: 'btn btn--primary', onclick: () => newCustomer(ctx) }, iconEl('plus'), 'New customer'),
+      }, iconEl('download'), t('common.exportCsv')),
+      h('button', { class: 'btn btn--primary', onclick: () => newCustomer(ctx) }, iconEl('plus'), t('customers.new')),
     ]));
 
   /* filter bar */
   const bar = h('div', { class: 'filterbar' },
-    searchBox('Search accounts, contacts or owners', ui.q, (v) => { ui.q = v; rerender({ keepFocus: true }); }),
-    selectFilter('Segment', [{ value: 'all', label: 'All segments' }].concat(SEGMENTS.map((s) => ({ value: s, label: s }))), ui.segment, (v) => { ui.segment = v; rerender(); }),
-    selectFilter('Status', [{ value: 'all', label: 'All statuses' }].concat(CUSTOMER_STATUS.map((s) => ({ value: s, label: s }))), ui.status, (v) => { ui.status = v; rerender(); }),
-    selectFilter('Sort', [
-      { value: 'name', label: 'Name' },
-      { value: 'value', label: 'Lifetime value' },
-      { value: 'recent', label: 'Last order' },
+    searchBox(t('customers.search'), ui.q, (v) => { ui.q = v; rerender({ keepFocus: true }); }),
+    selectFilter(t('customers.segment'), [{ value: 'all', label: t('customers.allSegments') }].concat(SEGMENTS.map((s) => ({ value: s, label: segmentLabel(s) }))), ui.segment, (v) => { ui.segment = v; rerender(); }),
+    selectFilter(t('customers.status'), [{ value: 'all', label: t('customers.allStatuses') }].concat(CUSTOMER_STATUS.map((s) => ({ value: s, label: statusLabel(s) }))), ui.status, (v) => { ui.status = v; rerender(); }),
+    selectFilter(t('customers.sort'), [
+      { value: 'name', label: t('customers.sortName') },
+      { value: 'value', label: t('customers.sortValue') },
+      { value: 'recent', label: t('customers.sortRecent') },
     ], ui.sort, (v) => { ui.sort = v; rerender(); }));
   root.appendChild(bar);
 
@@ -61,35 +63,35 @@ export function render(ctx) {
   if (ui.sort === 'recent') list.sort((a, b) => new Date(b.lastOrder) - new Date(a.lastOrder));
 
   root.appendChild(h('p', { class: 'small faint mono', style: 'margin:10px 0' },
-    `${list.length} of ${ws.customers.length} accounts shown`));
+    t('customers.shown', { n: list.length, total: ws.customers.length })));
 
   if (!list.length) {
-    root.appendChild(emptyState('No accounts match', 'Clear the search box or pick a different segment.'));
+    root.appendChild(emptyState(t('customers.emptyTitle'), t('customers.emptyBody')));
     return root;
   }
 
   const table = h('table', { class: 'data' },
     h('thead', {}, h('tr', {},
-      h('th', {}, 'Account'),
-      h('th', {}, 'Segment'),
-      h('th', {}, 'Owner'),
-      h('th', {}, 'Status'),
-      h('th', {}, 'Last order'),
-      h('th', { class: 'right' }, 'Lifetime value'),
-      h('th', { class: 'right' }, 'Open'))),
+      h('th', {}, t('customers.thAccount')),
+      h('th', {}, t('customers.thSegment')),
+      h('th', {}, t('customers.thOwner')),
+      h('th', {}, t('customers.thStatus')),
+      h('th', {}, t('customers.thLastOrder')),
+      h('th', { class: 'right' }, t('customers.thValue')),
+      h('th', { class: 'right' }, t('customers.thOpen')))),
     h('tbody', {}, list.map((c) => h('tr', { dataset: { id: c.id } },
       h('td', {},
         h('div', { style: 'font-weight:600' }, c.name),
         h('div', { class: 'faint small' }, `${c.contactName} · ${c.city}`)),
-      h('td', {}, h('span', { class: 'chip', style: 'cursor:default' }, c.segment)),
+      h('td', {}, h('span', { class: 'chip', style: 'cursor:default' }, segmentLabel(c.segment))),
       h('td', {}, c.owner),
       h('td', {}, statusPill(c.status)),
       h('td', { class: 'mono small' }, ago(c.lastOrder)),
       h('td', { class: 'right num' }, money(customerValue(ws, c))),
       h('td', { class: 'right' }, h('button', {
         class: 'btn btn--sm', dataset: { open: c.id },
-        'aria-label': `Open ${c.name}`,
-      }, 'Details'))))));
+        'aria-label': t('customers.openRow', { name: c.name }),
+      }, t('common.details')))))));
 
   const wrap = h('div', { class: 'tablewrap tablewrap--scroll' }, table);
   on(wrap, 'click', '[data-open]', (e, t) => openCustomer(ctx, t.dataset.open));
@@ -109,90 +111,95 @@ function openCustomer(ctx, id) {
 
   body.appendChild(h('div', { class: 'row' },
     statusPill(c.status),
-    h('span', { class: 'chip', style: 'cursor:default' }, c.segment),
-    h('span', { class: 'faint small mono' }, `Since ${fmtDate(c.since)}`)));
+    h('span', { class: 'chip', style: 'cursor:default' }, segmentLabel(c.segment)),
+    h('span', { class: 'faint small mono' }, t('customers.since', { date: fmtDate(c.since) }))));
 
   body.appendChild(defList([
-    ['Owner', c.owner],
-    ['Contact', c.contactName],
-    ['Email', h('a', { class: 'linkish', href: `mailto:${c.contactEmail}` }, c.contactEmail)],
-    ['Phone', h('span', { class: 'mono' }, c.contactPhone)],
-    ['Credit terms', `${c.creditDays} days`],
-    ['Last order', `${fmtDate(c.lastOrder)} (${ago(c.lastOrder)})`],
-    ['Lifetime value', h('span', { class: 'num' }, money(customerValue(ws, c)))],
+    [t('customers.owner'), c.owner],
+    [t('customers.contact'), c.contactName],
+    [t('customers.email'), h('a', { class: 'linkish', href: `mailto:${c.contactEmail}`, dir: 'ltr' }, c.contactEmail)],
+    [t('customers.phone'), h('span', { class: 'mono', dir: 'ltr' }, c.contactPhone)],
+    [t('customers.credit'), t('customers.creditDays', { n: c.creditDays })],
+    [t('customers.lastOrder'), t('customers.lastOrderVal', { date: fmtDate(c.lastOrder), ago: ago(c.lastOrder) })],
+    [t('customers.value'), h('span', { class: 'num' }, money(customerValue(ws, c)))],
   ]));
 
   /* status change */
   const statusSel = h('select', {
-    class: 'select', 'aria-label': 'Account status',
+    class: 'select', 'aria-label': t('customers.accountStatus'),
     onchange: (e) => {
       const next = e.target.value;
       store.update((s) => {
         const target = s.workspaces[ws.id].customers.find((x) => x.id === c.id);
         if (target) target.status = next;
       });
-      logActivity(ws.id, 'customer', `${c.name} marked ${next}`);
-      toast(`${c.name} is now ${next}`, 'ok');
+      logActivity(ws.id, 'customer', 'customerMarked', { name: c.name, status: next });
+      toast(t('customers.nowStatus', { name: c.name, status: statusLabel(next) }), 'ok');
       rerender();
     },
-  }, CUSTOMER_STATUS.map((s) => h('option', { value: s, selected: s === c.status }, s)));
-  body.appendChild(h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Account status'), statusSel));
+  }, CUSTOMER_STATUS.map((s) => h('option', { value: s, selected: s === c.status }, statusLabel(s))));
+  body.appendChild(h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.accountStatus')), statusSel));
 
   /* linked deals */
   const deals = ws.deals.filter((d) => d.customerId === c.id);
-  body.appendChild(h('h3', { style: 'margin-top:6px' }, `Linked deals (${deals.length})`));
+  body.appendChild(h('h3', { style: 'margin-top:6px' }, t('customers.linked', { n: deals.length })));
   body.appendChild(deals.length
     ? h('ul', { class: 'itemlist' }, deals.map((d) => h('li', {},
       h('div', { style: 'flex:1;min-width:0' },
-        h('div', { class: 'truncate' }, d.title),
+        h('div', { class: 'truncate' }, dealTitle(ws, d)),
         h('div', { class: 'faint small mono' }, `${stageLabel(d.stage)} · ${d.owner}`)),
       h('span', { class: 'num' }, money(d.value)))))
-    : h('p', { class: 'muted small' }, 'No deals recorded against this account.'));
+    : h('p', { class: 'muted small' }, t('customers.noDeals')));
 
   /* invoices */
   const invs = ws.invoices.filter((i) => i.customerId === c.id);
   const openInv = invs.filter((i) => i.status === 'sent' || i.status === 'overdue');
-  body.appendChild(h('h3', { style: 'margin-top:6px' }, `Invoices (${invs.length})`));
+  body.appendChild(h('h3', { style: 'margin-top:6px' }, t('customers.invoices', { n: invs.length })));
   body.appendChild(h('p', { class: 'small muted' },
-    `${openInv.length} open worth ${money(openInv.reduce((t, i) => t + i.amount, 0))}. ` +
-    `${invs.filter((i) => i.status === 'overdue').length} overdue.`));
+    t('customers.invSummary', {
+      n: openInv.length,
+      amount: money(openInv.reduce((sum, i) => sum + i.amount, 0)),
+      late: invs.filter((i) => i.status === 'overdue').length,
+    })));
   if (invs.length) {
     body.appendChild(h('ul', { class: 'itemlist' }, invs.slice(0, 5).map((i) => h('li', {},
       h('div', { style: 'flex:1;min-width:0' },
         h('div', { class: 'mono small' }, i.number),
-        h('div', { class: 'faint small' }, i.status === 'overdue' ? `${invoiceAgeDays(i)} days past due` : `Due ${fmtDate(i.dueAt)}`)),
+        h('div', { class: 'faint small' }, i.status === 'overdue'
+          ? t('customers.daysPastDue', { n: invoiceAgeDays(i) })
+          : t('customers.due', { date: fmtDate(i.dueAt) }))),
       statusPill(i.status),
       h('span', { class: 'num' }, money(i.amount))))));
   }
 
   /* notes */
-  body.appendChild(h('h3', { style: 'margin-top:6px' }, `Notes (${c.notes.length})`));
+  body.appendChild(h('h3', { style: 'margin-top:6px' }, t('customers.notes', { n: c.notes.length })));
   const noteList = h('ul', { class: 'notelist' });
   const paintNotes = () => {
     const fresh = store.state.workspaces[ws.id].customers.find((x) => x.id === c.id);
     noteList.innerHTML = '';
-    if (!fresh.notes.length) noteList.appendChild(h('li', { class: 'muted small' }, 'No notes yet.'));
+    if (!fresh.notes.length) noteList.appendChild(h('li', { class: 'muted small' }, t('customers.noNotes')));
     fresh.notes.forEach((n) => noteList.appendChild(h('li', {},
-      h('p', {}, n.text),
+      h('p', {}, noteText(n)),
       h('div', { class: 'faint small mono' }, `${n.by} · ${ago(n.at)}`))));
   };
   paintNotes();
   body.appendChild(noteList);
 
-  const noteInput = h('textarea', { class: 'textarea', placeholder: 'Add a note for the team…', 'aria-label': 'New note' });
-  body.appendChild(h('div', { class: 'field' }, h('span', { class: 'field__label' }, 'Add note'), noteInput));
+  const noteInput = h('textarea', { class: 'textarea', placeholder: t('customers.addNotePh'), 'aria-label': t('customers.newNote') });
+  body.appendChild(h('div', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.addNote')), noteInput));
 
   const drawer = openDrawer({
     title: c.name,
-    sub: `${c.segment} · owner ${c.owner}`,
+    sub: t('customers.drawerSub', { segment: segmentLabel(c.segment), owner: c.owner }),
     body,
     footer: [
-      h('button', { class: 'btn', onclick: () => drawer.close() }, 'Close'),
+      h('button', { class: 'btn', onclick: () => drawer.close() }, t('common.close')),
       h('button', {
         class: 'btn btn--primary',
         onclick: () => {
           const text = noteInput.value.trim();
-          if (!text) { toast('Write something first', 'bad'); return; }
+          if (!text) { toast(t('customers.writeFirst'), 'bad'); return; }
           store.update((s) => {
             const target = s.workspaces[ws.id].customers.find((x) => x.id === c.id);
             target.notes.unshift({
@@ -202,13 +209,13 @@ function openCustomer(ctx, id) {
               text,
             });
           });
-          logActivity(ws.id, 'note', `Note added on ${c.name}`);
+          logActivity(ws.id, 'note', 'noteAdded', { name: c.name });
           noteInput.value = '';
           paintNotes();
-          toast('Note saved', 'ok');
+          toast(t('customers.noteSaved'), 'ok');
           rerender();
         },
-      }, iconEl('plus'), 'Save note'),
+      }, iconEl('plus'), t('customers.saveNote')),
     ],
   });
 }
@@ -219,31 +226,31 @@ function newCustomer(ctx) {
   const { ws, rerender } = ctx;
   const owners = ws.members.filter((m) => m.status === 'active').map((m) => m.name);
   const form = h('div', {},
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Account name'),
-      h('input', { class: 'input', dataset: { f: 'name' }, placeholder: 'e.g. Ernakulam Supply Co' })),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Primary contact'),
-      h('input', { class: 'input', dataset: { f: 'contact' }, placeholder: 'Full name' })),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Segment'),
-      h('select', { class: 'select', dataset: { f: 'segment' } }, SEGMENTS.map((s) => h('option', { value: s }, s)))),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Owner'),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.fName')),
+      h('input', { class: 'input', dataset: { f: 'name' }, placeholder: t('customers.fNamePh') })),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.fContact')),
+      h('input', { class: 'input', dataset: { f: 'contact' }, placeholder: t('customers.fContactPh') })),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.segment')),
+      h('select', { class: 'select', dataset: { f: 'segment' } }, SEGMENTS.map((s) => h('option', { value: s }, segmentLabel(s))))),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.owner')),
       h('select', { class: 'select', dataset: { f: 'owner' } }, owners.map((o) => h('option', { value: o }, o)))),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Credit terms (days)'),
-      h('select', { class: 'select', dataset: { f: 'credit' } }, [15, 30, 45, 60].map((d) => h('option', { value: d, selected: d === 30 }, `${d} days`)))),
-    h('p', { class: 'hint' }, 'Saved to this workspace only, in your browser.'));
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('customers.fCredit')),
+      h('select', { class: 'select', dataset: { f: 'credit' } }, [15, 30, 45, 60].map((d) => h('option', { value: d, selected: d === 30 }, t('customers.creditDays', { n: d }))))),
+    h('p', { class: 'hint' }, t('customers.hint')));
 
   modal({
-    title: 'New customer',
+    title: t('customers.new'),
     body: form,
     actions: [
-      { label: 'Cancel' },
+      { label: t('common.cancel') },
       {
-        label: 'Create account',
+        label: t('customers.create'),
         class: 'btn--primary',
         onClick: (bodyEl) => {
           const get = (f) => bodyEl.querySelector(`[data-f="${f}"]`).value.trim();
           const name = get('name');
-          const contact = get('contact') || 'Not recorded';
-          if (!name) { toast('An account needs a name', 'bad'); return true; }
+          const contact = get('contact') || t('customers.notRecorded');
+          if (!name) { toast(t('customers.needName'), 'bad'); return true; }
           const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 20);
           store.update((s) => {
             s.workspaces[ws.id].customers.unshift({
@@ -263,8 +270,8 @@ function newCustomer(ctx) {
               notes: [],
             });
           });
-          logActivity(ws.id, 'customer', `Customer created — ${name}`);
-          toast(`${name} added`, 'ok');
+          logActivity(ws.id, 'customer', 'customerCreated', { name });
+          toast(t('customers.added', { name }), 'ok');
           rerender();
         },
       },

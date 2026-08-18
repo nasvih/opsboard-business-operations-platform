@@ -54,9 +54,9 @@
 /* the skip link lands on top of the sidebar, which wears the accent by
    default, so it carries an ink edge and an ink focus ring instead of
    disappearing into it */
-.skiplink{position:absolute;left:-9999px;top:0;z-index:100;background:var(--amber-fill);color:var(--on-amber);
+.skiplink{position:absolute;inset-inline-start:-9999px;top:0;z-index:100;background:var(--amber-fill);color:var(--on-amber);
   padding:10px 16px;border:2px solid var(--ink);border-radius:0 0 var(--r) 0;font-weight:600}
-.skiplink:focus{left:0}
+.skiplink:focus{inset-inline-start:0}
 .skiplink:focus-visible{outline-color:var(--ink)}
 .viewhost{flex:1;min-width:0}
 /* fields laid out by a grid space themselves; drop the stacked margin */

@@ -13,28 +13,36 @@
 <meta name="apple-mobile-web-app-title" content="Opsboard">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="./assets/app.css">
 <link rel="stylesheet" href="./assets/opsboard.css">
 <script>
-/* Colour scheme before first paint, so a dark session never flashes white.
-   Reads the same chrome key the app writes; no preference means follow the
-   operating system. main.js takes over from here. */
+/* Colour scheme and reading direction before first paint, so a dark session
+   never flashes white and an Arabic session never flashes left-to-right.
+   Reads the same two keys the app writes; no preference means light and
+   English. main.js and lib/i18n.js take over from here. */
 (function () {
   try {
     var saved = JSON.parse(localStorage.getItem('opsboard.chrome.v1') || '{}');
     var dark = saved.theme === 'dark' || false;
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
   } catch (e) { /* storage blocked: the light palette is the default anyway */ }
+  try {
+    var lang = localStorage.getItem('opsboard.lang') === 'ar' ? 'ar' : 'en';
+    document.documentElement.setAttribute('lang', lang);
+    document.documentElement.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
+    if (lang === 'ar') document.documentElement.classList.add('ar-root');
+  } catch (e) { /* storage blocked: English left-to-right is the default anyway */ }
 }());
 </script>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%236B3FA0'/%3E%3Ctext x='16' y='22' font-family='monospace' font-size='15' font-weight='700' text-anchor='middle' fill='%23FFFFFF'%3EOB%3C/text%3E%3C/svg%3E">
 </head>
 <body>
-<a class="skiplink" href="#main-view">Skip to main content</a>
+<a class="skiplink" href="#main-view" data-skiplink>Skip to main content</a>
 <div id="app" class="shell"></div>
 <noscript>
   <p style="padding:24px;font-family:system-ui">Opsboard is a client-side demo and needs JavaScript enabled. No data leaves your browser.</p>
+  <p dir="rtl" lang="ar" style="padding:0 24px 24px;font-family:system-ui">أوبسبورد تجربة تعمل داخل المتصفّح بالكامل وتحتاج إلى تفعيل جافاسكربت. لا تغادر أي بيانات متصفّحك.</p>
 </noscript>
 <script type="module" src="./src/main.js"></script>
 </body>

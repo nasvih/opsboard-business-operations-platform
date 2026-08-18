@@ -1,7 +1,8 @@
 /* Deals — pipeline board. No drag and drop: every card carries a stage select. */
 
 import { h, fmtDate, modal, toast, num } from '../../lib/ui.js';
-import { store, STAGES, stageLabel, logActivity, customerName } from '../data.js';
+import { store, STAGES, stageLabel, logActivity, customerName, dealTitle } from '../data.js';
+import { t } from '../main.js';
 import { pageHead, statCard, wsMoney, statusPill, selectFilter, emptyState, iconEl, plural } from '../parts.js';
 
 const ui = { owner: 'all', view: 'board' };
@@ -14,28 +15,27 @@ export function render(ctx) {
 
   const open = deals.filter((d) => d.stage !== 'won' && d.stage !== 'lost');
   const won = deals.filter((d) => d.stage === 'won');
-  const weighted = open.reduce((t, d) => t + (d.value * d.probability) / 100, 0);
+  const weighted = open.reduce((sum, d) => sum + (d.value * d.probability) / 100, 0);
 
   const root = h('div', { class: 'view view--pad' });
-  root.appendChild(pageHead('Deals',
-    'Move a deal by changing its stage. Every move is written to the activity feed for this workspace.',
+  root.appendChild(pageHead(t('deals.title'), t('deals.sub'),
     [
-      h('button', { class: 'btn btn--primary', onclick: () => newDeal(ctx) }, iconEl('plus'), 'New deal'),
+      h('button', { class: 'btn btn--primary', onclick: () => newDeal(ctx) }, iconEl('plus'), t('deals.new')),
     ]));
 
   root.appendChild(h('div', { class: 'grid g4' },
-    statCard('Open pipeline', money(open.reduce((t, d) => t + d.value, 0)), plural(open.length, 'deal'), true),
-    statCard('Weighted', money(Math.round(weighted)), 'value × probability'),
-    statCard('Won', money(won.reduce((t, d) => t + d.value, 0)), plural(won.length, 'deal') + ' closed won'),
-    statCard('Win rate', `${winRate(deals)}%`, plural(deals.filter((d) => d.stage === 'lost').length, 'deal') + ' lost')));
+    statCard(t('deals.openPipeline'), money(open.reduce((sum, d) => sum + d.value, 0)), plural(open.length, 'deal'), true),
+    statCard(t('deals.weighted'), money(Math.round(weighted)), t('deals.weightedSub')),
+    statCard(t('deals.won'), money(won.reduce((sum, d) => sum + d.value, 0)), t('deals.wonSub', { n: won.length })),
+    statCard(t('deals.winRate'), `${winRate(deals)}%`, t('deals.lostSub', { n: deals.filter((d) => d.stage === 'lost').length }))));
 
   const bar = h('div', { class: 'filterbar', style: 'margin-top:18px' },
-    selectFilter('Owner', [{ value: 'all', label: 'All owners' }].concat(owners.map((o) => ({ value: o, label: o }))), ui.owner, (v) => { ui.owner = v; rerender(); }),
-    selectFilter('Layout', [{ value: 'board', label: 'Stage board' }, { value: 'list', label: 'Flat list' }], ui.view, (v) => { ui.view = v; rerender(); }));
+    selectFilter(t('deals.owner'), [{ value: 'all', label: t('deals.allOwners') }].concat(owners.map((o) => ({ value: o, label: o }))), ui.owner, (v) => { ui.owner = v; rerender(); }),
+    selectFilter(t('deals.layout'), [{ value: 'board', label: t('deals.board') }, { value: 'list', label: t('deals.list') }], ui.view, (v) => { ui.view = v; rerender(); }));
   root.appendChild(bar);
 
   if (!deals.length) {
-    root.appendChild(emptyState('No deals for this filter', 'Pick another owner, or create a deal.'));
+    root.appendChild(emptyState(t('deals.emptyTitle'), t('deals.emptyBody')));
     return root;
   }
 
@@ -60,16 +60,16 @@ function moveDeal(ctx, id, stage) {
     if (stage === 'won') target.probability = 100;
     if (stage === 'lost') target.probability = 0;
   });
-  logActivity(ws.id, 'deal', `Deal moved to ${stageLabel(stage)} — ${deal.title}`);
-  toast(`Moved to ${stageLabel(stage)}`, 'ok');
+  logActivity(ws.id, 'deal', 'dealMoved', { stage, wsId: ws.id, titleOf: deal.id });
+  toast(t('deals.moved', { stage: stageLabel(stage) }), 'ok');
   rerender();
 }
 
 function stageSelect(ctx, deal) {
   return h('select', {
-    class: 'select select--sm', 'aria-label': `Stage for ${deal.title}`,
+    class: 'select select--sm', 'aria-label': t('deals.stageOf', { title: dealTitle(ctx.ws, deal) }),
     onchange: (e) => moveDeal(ctx, deal.id, e.target.value),
-  }, STAGES.map((s) => h('option', { value: s.id, selected: s.id === deal.stage }, s.label)));
+  }, STAGES.map((s) => h('option', { value: s.id, selected: s.id === deal.stage }, stageLabel(s.id))));
 }
 
 function board(ctx, deals) {
@@ -77,23 +77,23 @@ function board(ctx, deals) {
   const money = (n) => wsMoney(ws, n);
   const cols = STAGES.map((stage) => {
     const inStage = deals.filter((d) => d.stage === stage.id);
-    const total = inStage.reduce((t, d) => t + d.value, 0);
-    const col = h('section', { class: 'kcol', 'aria-label': `${stage.label} stage` },
+    const total = inStage.reduce((sum, d) => sum + d.value, 0);
+    const col = h('section', { class: 'kcol', 'aria-label': t('deals.stageCol', { stage: stageLabel(stage.id) }) },
       h('header', { class: 'kcol__head' },
         h('div', { class: 'between' },
-          h('h3', {}, stage.label),
+          h('h3', {}, stageLabel(stage.id)),
           h('span', { class: 'pill' }, num(inStage.length))),
         h('div', { class: 'num kcol__total' }, money(total))));
     const body = h('div', { class: 'kcol__body' });
-    if (!inStage.length) body.appendChild(h('p', { class: 'faint small', style: 'padding:8px' }, 'Empty'));
+    if (!inStage.length) body.appendChild(h('p', { class: 'faint small', style: 'padding:8px' }, t('common.empty')));
     inStage
       .sort((a, b) => b.value - a.value)
       .forEach((d) => body.appendChild(h('article', { class: 'kcard' },
-        h('div', { class: 'kcard__title' }, d.title),
+        h('div', { class: 'kcard__title' }, dealTitle(ws, d)),
         h('div', { class: 'between', style: 'margin-top:8px' },
           h('span', { class: 'num' }, money(d.value)),
           h('span', { class: 'faint small mono' }, `${d.probability}%`)),
-        h('div', { class: 'faint small', style: 'margin-top:4px' }, `${d.owner} · closes ${fmtDate(d.closeDate)}`),
+        h('div', { class: 'faint small', style: 'margin-top:4px' }, t('deals.closes', { owner: d.owner, date: fmtDate(d.closeDate) })),
         h('div', { style: 'margin-top:10px' }, stageSelect(ctx, d)))));
     col.appendChild(body);
     return col;
@@ -107,11 +107,11 @@ function flat(ctx, deals) {
   const rows = [...deals].sort((a, b) => b.value - a.value);
   const table = h('table', { class: 'data' },
     h('thead', {}, h('tr', {},
-      h('th', {}, 'Deal'), h('th', {}, 'Account'), h('th', {}, 'Owner'),
-      h('th', {}, 'Stage'), h('th', {}, 'Closes'),
-      h('th', { class: 'right' }, 'Value'), h('th', { class: 'right' }, 'Move'))),
+      h('th', {}, t('deals.thDeal')), h('th', {}, t('deals.thAccount')), h('th', {}, t('deals.thOwner')),
+      h('th', {}, t('deals.thStage')), h('th', {}, t('deals.thCloses')),
+      h('th', { class: 'right' }, t('deals.thValue')), h('th', { class: 'right' }, t('deals.thMove')))),
     h('tbody', {}, rows.map((d) => h('tr', {},
-      h('td', {}, h('div', { style: 'font-weight:600' }, d.title), h('div', { class: 'faint small mono' }, `${d.probability}% likely`)),
+      h('td', {}, h('div', { style: 'font-weight:600' }, dealTitle(ws, d)), h('div', { class: 'faint small mono' }, t('deals.likely', { p: d.probability }))),
       h('td', {}, customerName(ws, d.customerId)),
       h('td', {}, d.owner),
       h('td', {}, statusPill(d.stage, stageLabel(d.stage))),
@@ -125,37 +125,41 @@ function newDeal(ctx) {
   const { ws, rerender } = ctx;
   const owners = ws.members.filter((m) => m.status === 'active').map((m) => m.name);
   const form = h('div', {},
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Account'),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('deals.fAccount')),
       h('select', { class: 'select', dataset: { f: 'customer' } },
         [...ws.customers].sort((a, b) => a.name.localeCompare(b.name)).map((c) => h('option', { value: c.id }, c.name)))),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'What is it for'),
-      h('input', { class: 'input', dataset: { f: 'title' }, placeholder: 'e.g. annual supply contract' })),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Value'),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('deals.fWhat')),
+      h('input', { class: 'input', dataset: { f: 'title' }, placeholder: t('deals.fWhatPh') })),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('deals.fValue')),
       h('input', { class: 'input mono', dataset: { f: 'value' }, type: 'number', min: '0', step: '1000', value: '250000' })),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Stage'),
-      h('select', { class: 'select', dataset: { f: 'stage' } }, STAGES.map((s) => h('option', { value: s.id }, s.label)))),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Owner'),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('deals.fStage')),
+      h('select', { class: 'select', dataset: { f: 'stage' } }, STAGES.map((s) => h('option', { value: s.id }, stageLabel(s.id))))),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('deals.fOwner')),
       h('select', { class: 'select', dataset: { f: 'owner' } }, owners.map((o) => h('option', { value: o }, o)))));
 
   modal({
-    title: 'New deal',
+    title: t('deals.new'),
     body: form,
     actions: [
-      { label: 'Cancel' },
+      { label: t('common.cancel') },
       {
-        label: 'Create deal',
+        label: t('deals.create'),
         class: 'btn--primary',
         onClick: (bodyEl) => {
           const get = (f) => bodyEl.querySelector(`[data-f="${f}"]`).value;
           const cust = ws.customers.find((c) => c.id === get('customer'));
-          const what = get('title').trim() || 'new opportunity';
+          const what = get('title').trim();
           const value = Math.max(0, Number(get('value')) || 0);
           const stage = get('stage');
+          const id = `${ws.id}-d${Date.now().toString(36)}`;
           store.update((s) => {
             s.workspaces[ws.id].deals.unshift({
-              id: `${ws.id}-d${Date.now().toString(36)}`,
+              id,
               ws: ws.id,
-              title: `${cust.name} — ${what}`,
+              /* a title the reader typed is kept verbatim; the default is a key,
+                 so an untitled deal still reads in whichever language is on */
+              title: what ? `${cust.name} — ${what}` : undefined,
+              kindKey: what ? undefined : 'new',
               customerId: cust.id,
               stage,
               value,
@@ -166,8 +170,8 @@ function newDeal(ctx) {
               closeDate: new Date(Date.now() + 30 * 86400000).toISOString(),
             });
           });
-          logActivity(ws.id, 'deal', `Deal created — ${cust.name} — ${what}`);
-          toast('Deal added to the pipeline', 'ok');
+          logActivity(ws.id, 'deal', 'dealCreated', { wsId: ws.id, titleOf: id });
+          toast(t('deals.added'), 'ok');
           rerender();
         },
       },

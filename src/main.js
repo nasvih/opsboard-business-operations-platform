@@ -1,11 +1,13 @@
 /* ============================================================
-   Opsboard — boot: store, shell, workspace switcher, router, copilot.
+   Opsboard — boot: language, store, shell, workspace switcher, router, copilot.
    ============================================================ */
 
-import { h, qs, icon, toast, confirmDialog, modal, num, router } from '../lib/ui.js';
+import { h, qs, icon, toast, confirmDialog, modal, num, router, setAgoStrings, setUiStrings } from '../lib/ui.js';
+import { createI18n } from '../lib/i18n.js';
+import { STRINGS } from './strings.js';
 import {
   store, activeWorkspace, setWorkspace, WORKSPACE_IDS, openDeals,
-  overdueInvoices, seatsUsed, resetDemo,
+  overdueInvoices, seatsUsed, resetDemo, planLabel,
 } from './data.js';
 import { createCopilot } from './agent.js';
 import { initPWA } from '../lib/pwa.js';
@@ -20,14 +22,32 @@ import * as team from './views/team.js';
 import * as reports from './views/reports.js';
 import * as settings from './views/settings.js';
 
+/* ---------- language ----------
+
+   One instance for the whole app. Every other module imports `t` from here,
+   so there is exactly one dictionary and one stored choice. `t` and `tList`
+   are function declarations rather than consts because the module graph is
+   circular — data.js and the views import this file while this file is still
+   evaluating — and a hoisted function is safe to bind at that moment. */
+
+const i18n = createI18n({ key: 'opsboard', dict: STRINGS });
+
+export function t(path, vars) { return i18n.t(path, vars); }
+export function tList(path) { return i18n.list(path); }
+export const isRtl = () => i18n.isRtl;
+
+/* The two shared libraries render a handful of words of their own. */
+setAgoStrings({ now: t('time.now'), m: t('time.m'), h: t('time.h'), d: t('time.d') });
+setUiStrings({ cancel: t('common.cancel'), confirm: t('common.confirm'), close: t('common.close') });
+
 const NAV = [
-  { id: 'overview', label: 'Overview', icon: 'home', group: 'Workspace', view: overview },
-  { id: 'customers', label: 'Customers', icon: 'users', group: 'Workspace', view: customers, count: (ws) => ws.customers.length },
-  { id: 'deals', label: 'Deals', icon: 'bolt', group: 'Revenue', view: deals, count: (ws) => openDeals(ws).length },
-  { id: 'invoices', label: 'Invoices', icon: 'file', group: 'Revenue', view: invoices, count: (ws) => overdueInvoices(ws).length || null },
-  { id: 'reports', label: 'Reports', icon: 'chart', group: 'Revenue', view: reports },
-  { id: 'team', label: 'Team and roles', icon: 'shield', group: 'Administration', view: team, count: (ws) => seatsUsed(ws) },
-  { id: 'settings', label: 'Settings', icon: 'cog', group: 'Administration', view: settings },
+  { id: 'overview', label: t('nav.overview'), icon: 'home', group: 'Workspace', view: overview },
+  { id: 'customers', label: t('nav.customers'), icon: 'users', group: 'Workspace', view: customers, count: (ws) => ws.customers.length },
+  { id: 'deals', label: t('nav.deals'), icon: 'bolt', group: 'Revenue', view: deals, count: (ws) => openDeals(ws).length },
+  { id: 'invoices', label: t('nav.invoices'), icon: 'file', group: 'Revenue', view: invoices, count: (ws) => overdueInvoices(ws).length || null },
+  { id: 'reports', label: t('nav.reports'), icon: 'chart', group: 'Revenue', view: reports },
+  { id: 'team', label: t('nav.team'), icon: 'shield', group: 'Administration', view: team, count: (ws) => seatsUsed(ws) },
+  { id: 'settings', label: t('nav.settings'), icon: 'cog', group: 'Administration', view: settings },
 ];
 
 /* Two glyphs the shared icon set does not carry, written here in the same
@@ -81,19 +101,16 @@ const FRAMED = new URLSearchParams(location.search).get('frame') === 'phone';
 
 /* The colour control never names a colour: the glyph carries it, and the
    accessible name stays neutral while aria-pressed reports the accent tone. */
-const TONE_LABEL = 'Sidebar colour';
-const railLabel = (railed) => (railed ? 'Expand sidebar' : 'Collapse sidebar');
+const TONE_LABEL = t('side.tone');
+const railLabel = (railed) => (railed ? t('side.railExpand') : t('side.railCollapse'));
 
 const SOURCE_URL = 'https://github.com/nasvih/opsboard-business-operations-platform';
-const SOURCE_NOTE = 'The source is published so it can be read, run and evaluated, but it is not '
-  + 'open source: copying, modifying, redistributing, deploying it or using it as training data '
-  + 'needs written permission. See the LICENSE file in the repository.';
 
 /* One "opens in a new tab" link, used in the sidebar footer and the About modal. */
 function outLink(url, label, iconHtml, cls = 'btn btn--block') {
   return h('a', {
     class: cls, href: url, target: '_blank', rel: 'noopener noreferrer',
-    title: label, 'aria-label': `${label} — opens in a new tab`,
+    title: label, 'aria-label': t('common.newTab', { label }),
   }, h('span', { html: iconHtml }).firstChild, h('span', {}, label));
 }
 
@@ -179,7 +196,7 @@ function applyTheme() {
   if (meta) meta.setAttribute('content', dark ? '#141517' : '#6B3FA0');
   const btn = qs('[data-tool="theme"]');
   if (btn) {
-    const label = dark ? 'Switch to light mode' : 'Switch to dark mode';
+    const label = dark ? t('top.light') : t('top.dark');
     btn.setAttribute('aria-pressed', String(dark));
     btn.setAttribute('aria-label', label);
     btn.title = label;
@@ -211,7 +228,7 @@ function markAllRead() {
   saveChrome();
   paintBell();
   paintNotifPanel();
-  toast(`${added} ${added === 1 ? 'notification' : 'notifications'} marked read`, 'ok');
+  toast(t('notifPanel.marked', { n: added }), 'ok');
 }
 
 function paintBell() {
@@ -223,8 +240,8 @@ function paintBell() {
   badge.textContent = count > 9 ? '9+' : String(count);
   badge.hidden = count === 0;
   const label = count
-    ? `Notifications, ${count} unread`
-    : 'Notifications, nothing unread';
+    ? t('notifPanel.labelUnread', { n: count })
+    : t('notifPanel.labelClear');
   btn.setAttribute('aria-label', label);
   btn.title = label;
 }
@@ -240,18 +257,16 @@ function paintNotifPanel() {
   panel.innerHTML = '';
   panel.appendChild(h('header', { class: 'notifpanel__head' },
     h('div', { style: 'min-width:0' },
-      h('h3', {}, 'Notifications'),
-      h('div', { class: 'label truncate' }, `${ws.name} · ${unread} unread`)),
+      h('h3', {}, t('notifPanel.title')),
+      h('div', { class: 'label truncate' }, t('notifPanel.sub', { name: ws.name, n: unread }))),
     unread
-      ? h('button', { class: 'btn btn--sm', onclick: markAllRead }, 'Mark all read')
+      ? h('button', { class: 'btn btn--sm', onclick: markAllRead }, t('notifPanel.markAll'))
       : null));
 
   if (!items.length) {
     panel.appendChild(h('div', { class: 'notifempty' },
-      h('h4', {}, 'Nothing needs attention'),
-      h('p', { class: 'muted small' },
-        `No invoice in ${ws.name} is past due, no deal is closing this week and the plan still has seats. `
-        + 'Overdue money, deals reaching their close date, a full plan and anything the team changes all arrive here.')));
+      h('h4', {}, t('notifPanel.emptyTitle')),
+      h('p', { class: 'muted small' }, t('notifPanel.emptyBody', { name: ws.name }))));
     return;
   }
 
@@ -261,7 +276,7 @@ function paintNotifPanel() {
     list.appendChild(h('li', { class: `notifitem${seen ? '' : ' is-unread'}` },
       h('button', {
         class: 'notifitem__go', type: 'button',
-        'aria-label': `${n.title}. Open ${TITLES[n.nav] || n.nav}.`,
+        'aria-label': t('notifPanel.goto', { title: n.title, screen: TITLES[n.nav] || n.nav }),
         onclick: () => { markRead(n.id); toggleNotif(false); showScreen(n.nav); },
       },
       h('div', { class: 'notifitem__top' },
@@ -270,16 +285,15 @@ function paintNotifPanel() {
       h('div', { class: 'notifitem__title' }, n.title),
       h('p', { class: 'muted small' }, n.line)),
       seen
-        ? h('span', { class: 'notifitem__seen label' }, 'read')
+        ? h('span', { class: 'notifitem__seen label' }, t('common.read'))
         : h('button', {
           class: 'btn btn--sm btn--ghost notifitem__read', type: 'button',
-          title: 'Mark read', 'aria-label': `Mark "${n.title}" read`,
+          title: t('notifPanel.markRead'), 'aria-label': t('notifPanel.markReadOn', { title: n.title }),
           onclick: () => markRead(n.id),
         }, iconEl('check'))));
   });
   panel.appendChild(list);
-  panel.appendChild(h('p', { class: 'notifpanel__foot small faint' },
-    'Built from this workspace as it stands. Read marks are kept in this browser.'));
+  panel.appendChild(h('p', { class: 'notifpanel__foot small faint' }, t('notifPanel.foot')));
 }
 
 function toggleNotif(force) {
@@ -297,11 +311,11 @@ function notifControl() {
   const btn = h('button', {
     class: 'btn btn--ghost btn--icon bellbtn', type: 'button', dataset: { tool: 'notify' },
     'aria-haspopup': 'dialog', 'aria-expanded': 'false',
-    'aria-label': 'Notifications', title: 'Notifications',
+    'aria-label': t('notifPanel.label'), title: t('notifPanel.label'),
     onclick: (e) => { e.stopPropagation(); toggleNotif(); },
   }, h('span', { html: icon('bell') }).firstChild, badge);
   const panel = h('div', {
-    class: 'notifpanel', role: 'dialog', 'aria-label': 'Notifications', hidden: true,
+    class: 'notifpanel', role: 'dialog', 'aria-label': t('notifPanel.label'), hidden: true,
     onclick: (e) => e.stopPropagation(),
   });
   return h('div', { class: 'notif', dataset: { notif: '1' } }, btn, panel);
@@ -349,20 +363,20 @@ function openStage() {
   if (qs('.stage')) return;
   const back = h('button', {
     class: 'btn btn--dark', type: 'button', onclick: closeStage,
-  }, h('span', { html: DEVICE_ICON.desktop }).firstChild, h('span', {}, 'Back to desktop'));
+  }, h('span', { html: DEVICE_ICON.desktop }).firstChild, h('span', {}, t('top.back')));
 
   const frame = h('iframe', {
     class: 'phone__screen',
-    title: 'Opsboard at phone size',
+    title: t('top.frameTitle'),
     src: `./index.html?frame=phone${location.hash || '#/overview'}`,
     loading: 'eager',
   });
 
-  const stage = h('div', { class: 'stage', role: 'dialog', 'aria-label': 'Phone preview' },
+  const stage = h('div', { class: 'stage', role: 'dialog', 'aria-label': t('top.stageLabel') },
     h('div', { class: 'stage__bar' },
       h('div', { style: 'min-width:0' },
-        h('div', { class: 'stage__name' }, 'Opsboard'),
-        h('div', { class: 'stage__size label' }, '390 × 844 · the app running inside a frame')),
+        h('div', { class: 'stage__name' }, t('brand.name')),
+        h('div', { class: 'stage__size label' }, t('top.stageSize'))),
       back),
     h('div', { class: 'phone' }, h('div', { class: 'phone__notch' }), frame));
 
@@ -376,58 +390,26 @@ function openStage() {
 }
 
 function deviceControl() {
-  return h('div', { class: 'devswitch', role: 'group', 'aria-label': 'Preview size' },
+  return h('div', { class: 'devswitch', role: 'group', 'aria-label': t('top.previewSize') },
     h('button', {
       class: 'btn btn--ghost btn--icon', type: 'button', dataset: { device: 'phone' },
-      'aria-pressed': 'false', 'aria-label': 'Preview at phone size', title: 'Preview at phone size',
+      'aria-pressed': 'false', 'aria-label': t('top.phone'), title: t('top.phone'),
       onclick: openStage,
     }, h('span', { html: DEVICE_ICON.phone }).firstChild),
     h('button', {
       class: 'btn btn--ghost btn--icon', type: 'button', dataset: { device: 'desktop' },
-      'aria-pressed': 'true', 'aria-label': 'Desktop view', title: 'Desktop view',
+      'aria-pressed': 'true', 'aria-label': t('top.desktop'), title: t('top.desktop'),
       onclick: closeStage,
     }, h('span', { html: DEVICE_ICON.desktop }).firstChild));
 }
 
 /* ---------- about this demo ---------- */
 
-const ABOUT = [
-  {
-    title: 'What this is',
-    text: 'Opsboard is the operations core of a business: one workspace holding its customers, its '
-      + 'deal pipeline, its invoices, its team and their roles, and the reports built from all of it. '
-      + 'Switch workspace in the sidebar and every screen, count and total re-scopes to that business.',
-  },
-  {
-    title: 'Where it helps a business',
-    list: [
-      'The customer list, the pipeline and the invoice ledger stop living in three separate spreadsheets.',
-      'Money that is overdue is visible on the invoices screen without anyone compiling a report first.',
-      'A new joiner gets an account with a role instead of being handed a shared login.',
-      'Several businesses or branches run on one deployment rather than a separate system each.',
-      'Reports read the same records staff work in every day, so the numbers cannot drift apart.',
-    ],
-  },
-  {
-    title: 'How it would work for real',
-    text: 'The interface and the workflow would stay as they are here. Behind them, the browser storage '
-      + 'is replaced by a real database, sign-in and permissions become accounts rather than a picker, '
-      + 'and hosting, backups and access control are set up properly. This demo is the interface and the '
-      + 'workflow, not the production system.',
-  },
-  {
-    title: 'How this demo works',
-    list: [
-      'You can actually use it. Add a customer or a deal, move a deal a stage, mark an invoice paid, '
-        + 'invite someone — every flow runs and the other screens follow.',
-      'Your data stays in this browser. Nothing is sent to a server, and "Reset demo data" clears it. '
-        + 'It does not sync between browsers or devices.',
-      'The assistant is simulated. Opsboard Copilot reads this app\'s own demo data, and can change it '
-        + 'when you ask. It is a demonstration of the interaction, not a connected model.',
-      'The topbar carries a bell for notifications built from these same records, a phone preview that '
-        + 'runs the app inside a 390-wide frame, and a dark mode. All three remember what you chose.',
-    ],
-  },
+const aboutBlocks = () => [
+  { title: t('about.b1t'), text: t('about.b1') },
+  { title: t('about.b2t'), list: tList('about.b2') },
+  { title: t('about.b3t'), text: t('about.b3') },
+  { title: t('about.b4t'), list: tList('about.b4') },
 ];
 
 /* Worked examples for the About modal: the sentence in, the change out. Names
@@ -440,18 +422,18 @@ function aboutExamples() {
   const dealAccount = deal ? (ws.customers.find((c) => c.id === deal.customerId) || { name: account }).name : account;
   const late = overdueInvoices(ws)[0] || ws.invoices[0];
   return [
-    [`Move the ${dealAccount} deal to negotiation`, 'the card changes stage on the pipeline board and the open pipeline total moves with it'],
-    [`Log a note on ${account}: they asked for 45 day terms`, 'the note appears at the top of that account\'s drawer, filed under your name'],
-    [late ? `Mark ${late.number} paid` : 'Mark the oldest overdue invoice paid', 'status becomes paid, outstanding drops by the invoice amount, the aging bars redraw'],
-    [`Flag ${account} as at risk`, 'the status pill changes and the account joins the at-risk list'],
-    ['Invite Priya Menon as an admin', 'a pending invite on the Team screen and one more seat used'],
-    [`New deal for ${account}, 4 lakh, proposal stage`, 'a new card in Proposal worth ₹4,00,000, owned by the account owner'],
+    [t('about.exSay1', { account: dealAccount }), t('about.exDoes1')],
+    [t('about.exSay2', { account }), t('about.exDoes2')],
+    [late ? t('about.exSay3', { number: late.number }) : t('about.exSay3b'), t('about.exDoes3')],
+    [t('about.exSay4', { account }), t('about.exDoes4')],
+    [t('about.exSay5'), t('about.exDoes5')],
+    [t('about.exSay6', { account }), t('about.exDoes6')],
   ];
 }
 
 function aboutModal() {
   const body = h('div', { class: 'about' },
-    ABOUT.map((block) => h('section', { class: 'about__block' },
+    aboutBlocks().map((block) => h('section', { class: 'about__block' },
       h('h4', {}, block.title),
       block.text ? h('p', { class: 'muted' }, block.text) : null,
       block.list
@@ -460,21 +442,20 @@ function aboutModal() {
 
   /* what to type, and what it does — the copilot's six actions */
   body.appendChild(h('section', { class: 'about__block' },
-    h('h4', {}, 'What you can ask the copilot to do'),
-    h('p', { class: 'muted' }, 'It shows you the record it matched and waits for you to press the button. '
-      + 'Nothing is written until you do. Type any of these into the copilot, bottom right.'),
+    h('h4', {}, t('about.exTitle')),
+    h('p', { class: 'muted' }, t('about.exLead')),
     h('ul', { class: 'about__ex' }, aboutExamples().map(([say, does]) => h('li', {},
       h('span', { class: 'about__say mono' }, say),
       h('span', { class: 'about__does muted' }, does))))));
   /* sits under the fourth block, saying the same thing the LICENSE file does */
   body.appendChild(h('div', { class: 'about__source' },
-    h('p', { class: 'muted' }, SOURCE_NOTE),
-    outLink(SOURCE_URL, 'Source on GitHub', CODE_ICON, 'btn btn--sm')));
+    h('p', { class: 'muted' }, t('about.source')),
+    outLink(SOURCE_URL, t('common.sourceLink'), CODE_ICON, 'btn btn--sm')));
   modal({
-    title: 'About this demo',
+    title: t('about.title'),
     body,
     width: '560px',
-    actions: [{ label: 'Got it', class: 'btn--primary' }],
+    actions: [{ label: t('common.gotIt'), class: 'btn--primary' }],
   });
 }
 
@@ -488,8 +469,8 @@ function buildShell() {
     h('div', { class: 'side__brand' },
       h('span', { class: 'mark' }, 'OB'),
       h('div', { style: 'min-width:0' },
-        h('div', { class: 'side__name' }, 'Opsboard'),
-        h('div', { class: 'side__tag' }, 'Operations platform')),
+        h('div', { class: 'side__name' }, t('brand.name')),
+        h('div', { class: 'side__tag' }, t('brand.tag'))),
       /* rail and colour live on the brand row: icon-only, right-aligned, and
          stacked by the kit when the sidebar narrows to the rail */
       h('div', { class: 'side__brandbtns' },
@@ -508,7 +489,7 @@ function buildShell() {
 
   side.appendChild(workspaceSwitcher());
 
-  const navEl = h('nav', { class: 'side__nav', 'aria-label': 'Main' });
+  const navEl = h('nav', { class: 'side__nav', 'aria-label': t('nav.main') });
   const groups = [];
   NAV.forEach((item) => {
     let g = groups.find((x) => x.name === item.group);
@@ -516,7 +497,7 @@ function buildShell() {
     g.items.push(item);
   });
   groups.forEach((g) => {
-    const box = h('div', { class: 'navgroup' }, h('div', { class: 'navgroup__label' }, g.name));
+    const box = h('div', { class: 'navgroup' }, h('div', { class: 'navgroup__label' }, t(`navGroup.${g.name}`)));
     g.items.forEach((item) => {
       box.appendChild(h('button', {
         /* title and aria-label carry the name once the rail hides the text */
@@ -543,57 +524,58 @@ function buildShell() {
     /* paired rows run at the small size — it is what initPWA builds its own
        control at, so Install and Reset match, and it keeps nasvih.in whole */
     h('div', { class: 'side__pair' },
-      outLink('https://www.nasvih.in', 'nasvih.in', EXTERNAL_ICON, 'btn btn--block btn--sm btn--site'),
-      outLink(SOURCE_URL, 'GitHub', CODE_ICON, 'btn btn--block btn--sm')),
+      outLink('https://www.nasvih.in', t('common.site'), EXTERNAL_ICON, 'btn btn--block btn--sm btn--site'),
+      outLink(SOURCE_URL, t('common.github'), CODE_ICON, 'btn btn--block btn--sm')),
     /* initPWA puts its control at the head of this row, and only when the
        browser actually offers an install; while it is absent or hidden the
        row holds one item and Reset takes the full width on its own */
     h('div', { class: 'side__pair side__pwa' },
       h('button', {
         /* label in a span so the rail can hide it; title keeps it readable there */
-        class: 'btn btn--block btn--sm', title: 'Reset demo data', 'aria-label': 'Reset demo data',
+        class: 'btn btn--block btn--sm', title: t('side.reset'), 'aria-label': t('side.reset'),
         onclick: async () => {
-          const ok = await confirmDialog('All three workspaces will be regenerated from the seed. Every edit you have made in this browser will be lost.',
-            { title: 'Reset demo data', danger: true, okLabel: 'Reset everything' });
+          const ok = await confirmDialog(t('side.resetBody'),
+            { title: t('side.reset'), danger: true, okLabel: t('side.resetOk') });
           if (!ok) return;
           resetDemo();
-          toast('Demo data reset', 'ok');
+          toast(t('side.resetDone'), 'ok');
           paint(true);
         },
-      }, iconEl('refresh'), h('span', {}, 'Reset demo data'))),
-    h('p', { class: 'side__note' },
-      'Sample data only. Saved in this browser, never sent anywhere.')));
+      }, iconEl('refresh'), h('span', {}, t('side.reset')))),
+    h('p', { class: 'side__note' }, t('side.note'))));
 
   /* main */
   const main = h('div', { class: 'main' });
   const topbar = h('header', { class: 'topbar' },
     h('button', {
-      class: 'btn btn--ghost btn--icon sidebtn', 'aria-label': 'Open navigation',
+      class: 'btn btn--ghost btn--icon sidebtn', 'aria-label': t('nav.open'),
       'aria-controls': 'sidebar', 'aria-expanded': 'false',
       onclick: toggleSidebar, html: icon('menu'),
     }),
     h('div', { style: 'min-width:0' },
-      h('div', { class: 'topbar__title', dataset: { title: '1' } }, 'Overview'),
+      h('div', { class: 'topbar__title', dataset: { title: '1' } }, t('nav.overview')),
       h('div', { class: 'topbar__sub', dataset: { subtitle: '1' } }, '')),
     h('div', { class: 'spacer' }),
-    /* three icon-only controls, then the demo notice as a real button.
-       The framed copy inside the phone preview leaves the device switch out
-       so the preview cannot open a preview. */
+    /* four controls: the device preview, the bell, the language and the
+       colour scheme. Language sits immediately before the colour switch so the
+       row reads language, theme, and the framed copy inside the phone preview
+       leaves the device switch out — a preview cannot open a preview. */
     h('div', { class: 'topbar__tools' },
       FRAMED ? null : deviceControl(),
       notifControl(),
+      i18n.toggle(),
       h('button', {
         class: 'btn btn--ghost btn--icon', type: 'button', dataset: { tool: 'theme' },
-        'aria-pressed': 'false', 'aria-label': 'Switch to dark mode', title: 'Switch to dark mode',
+        'aria-pressed': 'false', 'aria-label': t('top.dark'), title: t('top.dark'),
         html: THEME_ICON.moon,
         onclick: () => { chrome.theme = isDark() ? 'light' : 'dark'; saveChrome(); applyTheme(); },
       })),
     h('button', {
       class: 'pill pill--amber pill--btn',
-      title: 'Demo build: all records are generated locally and stored in this browser only. Open for details.',
-      'aria-label': 'About this demo',
+      title: t('top.aboutTitle'),
+      'aria-label': t('top.about'),
       onclick: aboutModal,
-    }, 'About this demo'));
+    }, t('top.about')));
   /* The copilot has exactly one entry point: the round launcher the assistant
      mounts bottom-right, plus its own Cmd/Ctrl+K shortcut. No topbar twin. */
 
@@ -621,18 +603,18 @@ function workspaceSwitcher() {
       btn.setAttribute('aria-expanded', String(open));
     },
   });
-  const list = h('ul', { class: 'wsw__list', role: 'listbox', 'aria-label': 'Choose workspace' });
+  const list = h('ul', { class: 'wsw__list', role: 'listbox', 'aria-label': t('side.choose') });
 
   const paintSwitcher = () => {
     const ws = activeWorkspace();
     btn.innerHTML = '';
-    btn.title = `Workspace: ${ws.name}. Choose another.`;
-    btn.setAttribute('aria-label', `Workspace: ${ws.name}. Choose another.`);
+    btn.title = t('side.current', { name: ws.name });
+    btn.setAttribute('aria-label', t('side.current', { name: ws.name }));
     btn.append(
       h('span', { class: 'avatar avatar--amber' }, ws.short),
       h('span', { class: 'wsw__meta' },
         h('span', { class: 'wsw__name truncate' }, ws.name),
-        h('span', { class: 'wsw__sub' }, `${ws.city} · ${ws.plan} plan`)),
+        h('span', { class: 'wsw__sub' }, t('side.sub', { city: ws.city, plan: planLabel(ws.plan) }))),
       iconEl('arrowRight', 'wsw__chev'));
     list.innerHTML = '';
     WORKSPACE_IDS.forEach((id) => {
@@ -647,13 +629,13 @@ function workspaceSwitcher() {
           btn.setAttribute('aria-expanded', 'false');
           paintSwitcher();
           paint(true);
-          toast(`Switched to ${w.name}`, 'ok');
+          toast(t('side.switched', { name: w.name }), 'ok');
         },
       },
       h('span', { class: 'avatar' }, w.short),
       h('span', { class: 'wsw__meta' },
         h('span', { class: 'wsw__name truncate' }, w.name),
-        h('span', { class: 'wsw__sub mono' }, `${w.customers.length} accounts · ${w.members.length} people`)),
+        h('span', { class: 'wsw__sub mono' }, t('side.optSub', { accounts: w.customers.length, people: w.members.length }))),
       isOn ? iconEl('check', 'wsw__chev') : null)));
     });
   };
@@ -662,7 +644,7 @@ function workspaceSwitcher() {
     if (!box.contains(e.target)) { box.classList.remove('is-open'); btn.setAttribute('aria-expanded', 'false'); }
   });
 
-  box.append(h('div', { class: 'label wsw__label' }, 'Workspace'), btn, list);
+  box.append(h('div', { class: 'label wsw__label' }, t('side.workspace')), btn, list);
   paintSwitcher();
   box.dataset.switcher = '1';
   box._paint = paintSwitcher;
@@ -693,10 +675,10 @@ function paintChrome() {
     const value = item.count ? item.count(ws) : null;
     if (c) c.textContent = value === null || value === undefined ? '' : num(value);
   });
-  const t = qs('[data-title]');
-  const s = qs('[data-subtitle]');
-  if (t) t.textContent = TITLES[current] || 'Overview';
-  if (s) s.textContent = ws.name;
+  const title = qs('[data-title]');
+  const sub = qs('[data-subtitle]');
+  if (title) title.textContent = TITLES[current] || t('nav.overview');
+  if (sub) sub.textContent = ws.name;
   const sw = qs('[data-switcher]');
   if (sw && sw._paint) sw._paint();
   paintBell();
@@ -735,14 +717,17 @@ function paint(full) {
   } catch (err) {
     nav.viewHost.appendChild(h('div', { class: 'view view--pad' },
       h('div', { class: 'empty' },
-        h('h3', {}, 'That screen could not be drawn'),
-        h('p', {}, 'Reset the demo data from the sidebar to rebuild the workspace.'))));
+        h('h3', {}, t('err.title')),
+        h('p', {}, t('err.body')))));
   }
   paintChrome();
   if (full) window.scrollTo({ top: 0 });
 }
 
 /* ---------- boot ---------- */
+
+const skip = qs('[data-skiplink]');
+if (skip) skip.textContent = t('common.skip');
 
 buildShell();
 applyChrome();
@@ -768,8 +753,16 @@ createCopilot({ show: showScreen }).mount(document.body);
    service worker registration, one install prompt. */
 const installBtn = FRAMED ? null : initPWA({
   mount: qs('.side__pwa'),
-  appName: 'Opsboard',
+  appName: t('brand.name'),
   onNote: (msg) => toast(msg, 'info'),
+  labels: {
+    install: t('pwa.install'),
+    installTitle: t('pwa.installTitle', { app: t('brand.name') }),
+    installed: t('pwa.installed', { app: t('brand.name') }),
+    dismissed: t('pwa.dismissed'),
+    ios: t('pwa.ios'),
+    other: t('pwa.other'),
+  },
 });
 if (installBtn) installBtn.parentNode.insertBefore(installBtn, installBtn.parentNode.firstChild);
 

@@ -1,110 +1,116 @@
 /* Team & roles — members, invites and the permission matrix. */
 
 import { h, fmtDate, ago, modal, toast, confirmDialog, meter, initials, on } from '../../lib/ui.js';
-import { store, ROLES, PERMISSIONS, PLANS, seatsUsed, logActivity } from '../data.js';
+import {
+  store, ROLES, PERMISSIONS, seatsUsed, logActivity, roleLabel, permLabel, planLabel,
+} from '../data.js';
+import { t } from '../main.js';
 import { pageHead, statCard, statusPill, emptyState, iconEl } from '../parts.js';
 
 export function render(ctx) {
   const { ws, rerender } = ctx;
   const root = h('div', { class: 'view view--pad' });
   const used = seatsUsed(ws);
-  const plan = PLANS.find((p) => p.id === ws.plan) || PLANS[0];
+  const plan = planLabel(ws.plan);
 
-  root.appendChild(pageHead('Team and roles',
-    'People with access to this workspace, and what each role is allowed to do. Permission changes are saved per workspace.',
-    [h('button', { class: 'btn btn--primary', onclick: () => invite(ctx) }, iconEl('plus'), 'Invite people')]));
+  root.appendChild(pageHead(t('team.title'), t('team.sub'),
+    [h('button', { class: 'btn btn--primary', onclick: () => invite(ctx) }, iconEl('plus'), t('team.invite'))]));
 
   root.appendChild(h('div', { class: 'grid g4' },
-    statCard('Seats used', `${used} / ${ws.seatsIncluded}`, `${plan.label} plan`, used > ws.seatsIncluded),
-    statCard('Active', String(ws.members.filter((m) => m.status === 'active').length), 'signed in at least once'),
-    statCard('Pending invites', String(ws.members.filter((m) => m.status === 'invited').length), 'awaiting first sign-in'),
-    statCard('Admins', String(ws.members.filter((m) => m.role === 'owner' || m.role === 'admin').length), 'owner plus admins')));
+    statCard(t('team.seatsUsed'), `${used} / ${ws.seatsIncluded}`, t('team.planSub', { plan }), used > ws.seatsIncluded),
+    statCard(t('team.active'), String(ws.members.filter((m) => m.status === 'active').length), t('team.activeSub')),
+    statCard(t('team.pending'), String(ws.members.filter((m) => m.status === 'invited').length), t('team.pendingSub')),
+    statCard(t('team.admins'), String(ws.members.filter((m) => m.role === 'owner' || m.role === 'admin').length), t('team.adminsSub'))));
 
   root.appendChild(h('div', { class: 'card', style: 'margin-top:20px' },
     h('div', { class: 'between' },
-      h('div', {}, h('h3', {}, 'Seat usage'),
+      h('div', {}, h('h3', {}, t('team.usage')),
         h('p', { class: 'small muted' }, used > ws.seatsIncluded
-          ? `${used - ws.seatsIncluded} seats over the plan allowance. Upgrade in Settings.`
-          : `${ws.seatsIncluded - used} seats still available on the ${plan.label} plan.`)),
+          ? t('team.over', { n: used - ws.seatsIncluded })
+          : t('team.left', { n: ws.seatsIncluded - used, plan }))),
       h('span', { class: 'num', style: 'font-size:20px' }, `${Math.round((used / ws.seatsIncluded) * 100)}%`)),
     h('div', { style: 'margin-top:10px' }, meter(used, ws.seatsIncluded, used > ws.seatsIncluded ? 'bad' : 'ok'))));
 
   /* members */
-  root.appendChild(h('h2', { style: 'margin:22px 0 10px' }, 'People'));
+  root.appendChild(h('h2', { style: 'margin:22px 0 10px' }, t('team.people')));
   if (!ws.members.length) {
-    root.appendChild(emptyState('No one here yet', 'Invite a colleague to get started.'));
+    root.appendChild(emptyState(t('team.emptyTitle'), t('team.emptyBody')));
   } else {
     const table = h('table', { class: 'data' },
       h('thead', {}, h('tr', {},
-        h('th', {}, 'Person'), h('th', {}, 'Role'), h('th', {}, 'Status'),
-        h('th', {}, 'Joined'), h('th', {}, 'Last active'), h('th', { class: 'right' }, 'Remove'))),
+        h('th', {}, t('team.thPerson')), h('th', {}, t('team.thRole')), h('th', {}, t('team.thStatus')),
+        h('th', {}, t('team.thJoined')), h('th', {}, t('team.thLastActive')), h('th', { class: 'right' }, t('team.thRemove')))),
       h('tbody', {}, ws.members.map((m) => h('tr', {},
         h('td', {},
           h('div', { class: 'row', style: 'gap:9px;flex-wrap:nowrap' },
             h('span', { class: 'avatar avatar--amber' }, initials(m.name)),
             h('div', { style: 'min-width:0' },
               h('div', { style: 'font-weight:600' }, m.name),
-              h('div', { class: 'faint small truncate' }, m.email)))),
+              h('div', { class: 'faint small truncate' }, h('span', { dir: 'ltr' }, m.email))))),
         h('td', {}, m.role === 'owner'
-          ? h('span', { class: 'pill pill--amber' }, 'owner')
+          ? h('span', { class: 'pill pill--amber' }, roleLabel('owner'))
           : h('select', {
-            class: 'select select--sm', 'aria-label': `Role for ${m.name}`,
+            class: 'select select--sm', 'aria-label': t('team.roleOf', { name: m.name }),
             onchange: (e) => setRole(ctx, m.id, e.target.value),
-          }, ROLES.filter((r) => r !== 'owner').map((r) => h('option', { value: r, selected: r === m.role }, r)))),
+          }, ROLES.filter((r) => r !== 'owner').map((r) => h('option', { value: r, selected: r === m.role }, roleLabel(r))))),
         h('td', {}, statusPill(m.status)),
         h('td', { class: 'mono small' }, fmtDate(m.joinedAt)),
-        h('td', { class: 'mono small' }, m.status === 'invited' ? 'not yet' : ago(m.lastActive)),
+        h('td', { class: 'mono small' }, m.status === 'invited' ? t('common.notYet') : ago(m.lastActive)),
         h('td', { class: 'right' }, m.role === 'owner'
-          ? h('span', { class: 'faint small' }, 'owner')
+          ? h('span', { class: 'faint small' }, roleLabel('owner'))
           : h('button', {
             class: 'btn btn--sm btn--danger', dataset: { rm: m.id },
-            'aria-label': `Remove ${m.name}`,
-          }, 'Remove'))))));
+            'aria-label': t('team.removeOf', { name: m.name }),
+          }, t('common.remove')))))));
     const wrap = h('div', { class: 'tablewrap tablewrap--scroll' }, table);
-    on(wrap, 'click', '[data-rm]', async (e, t) => {
-      const m = ws.members.find((x) => x.id === t.dataset.rm);
-      const ok = await confirmDialog(`${m.name} will lose access to ${ws.name}. Their notes and deals stay in place.`,
-        { title: 'Remove access', danger: true, okLabel: 'Remove access' });
+    on(wrap, 'click', '[data-rm]', async (e, el) => {
+      const m = ws.members.find((x) => x.id === el.dataset.rm);
+      const ok = await confirmDialog(t('team.removeBody', { name: m.name, ws: ws.name }),
+        { title: t('team.removeTitle'), danger: true, okLabel: t('team.removeOk') });
       if (!ok) return;
       store.update((s) => {
         const list = s.workspaces[ws.id].members;
         const idx = list.findIndex((x) => x.id === m.id);
         if (idx > -1) list.splice(idx, 1);
       });
-      logActivity(ws.id, 'team', `Access removed for ${m.name}`);
-      toast(`${m.name} removed`, 'ok');
+      logActivity(ws.id, 'team', 'accessRemoved', { name: m.name });
+      toast(t('team.removed', { name: m.name }), 'ok');
       rerender();
     });
     root.appendChild(wrap);
   }
 
   /* role matrix */
-  root.appendChild(h('h2', { style: 'margin:26px 0 6px' }, 'Role matrix'));
-  root.appendChild(h('p', { class: 'muted small', style: 'margin-bottom:12px' },
-    'Tick a box to grant a capability to a role. The owner role always keeps every permission.'));
+  root.appendChild(h('h2', { style: 'margin:26px 0 6px' }, t('team.matrix')));
+  root.appendChild(h('p', { class: 'muted small', style: 'margin-bottom:12px' }, t('team.matrixNote')));
 
   const matrix = h('table', { class: 'data matrix' },
     h('thead', {}, h('tr', {},
-      h('th', {}, 'Capability'),
-      ROLES.map((r) => h('th', { class: 'right' }, r)))),
+      h('th', {}, t('team.thCapability')),
+      ROLES.map((r) => h('th', { class: 'right' }, roleLabel(r))))),
     h('tbody', {}, PERMISSIONS.map((p) => h('tr', {},
-      h('td', {}, h('div', { style: 'font-weight:600' }, p.label), h('div', { class: 'faint small mono' }, p.id)),
+      h('td', {}, h('div', { style: 'font-weight:600' }, permLabel(p.id)),
+        h('div', { class: 'faint small mono' }, h('span', { dir: 'ltr' }, p.id))),
       ROLES.map((role) => {
         const locked = role === 'owner';
         const cb = h('input', {
           type: 'checkbox',
           checked: !!ws.matrix[role][p.id],
           disabled: locked,
-          'aria-label': `${p.label} for ${role}`,
+          'aria-label': t('team.permFor', { perm: permLabel(p.id), role: roleLabel(role) }),
           onchange: (e) => {
             const on2 = e.target.checked;
             store.update((s) => { s.workspaces[ws.id].matrix[role][p.id] = on2; });
-            logActivity(ws.id, 'team', `${on2 ? 'Granted' : 'Revoked'} ${p.id} for ${role}`);
-            toast(`${role}: ${p.label.toLowerCase()} ${on2 ? 'granted' : 'revoked'}`);
+            logActivity(ws.id, 'team', on2 ? 'permGranted' : 'permRevoked', { perm: p.id, role });
+            toast(t('team.permToast', {
+              role: roleLabel(role),
+              perm: permLabel(p.id).toLowerCase(),
+              state: on2 ? t('team.granted') : t('team.revoked'),
+            }));
           },
         });
         return h('td', { class: 'right' }, h('label', { class: 'checkcell' }, cb,
-          h('span', { class: 'faint small mono' }, locked ? 'always' : '')));
+          h('span', { class: 'faint small mono' }, locked ? t('common.always') : '')));
       })))));
   root.appendChild(h('div', { class: 'tablewrap tablewrap--scroll' }, matrix));
 
@@ -118,39 +124,42 @@ function setRole(ctx, id, role) {
     const target = s.workspaces[ws.id].members.find((x) => x.id === id);
     if (target) target.role = role;
   });
-  logActivity(ws.id, 'team', `${m.name} set to ${role}`);
-  toast(`${m.name} is now ${role}`, 'ok');
+  logActivity(ws.id, 'team', 'roleSet', { name: m.name, role });
+  toast(t('team.roleSet', { name: m.name, role: roleLabel(role) }), 'ok');
   rerender();
 }
 
 function invite(ctx) {
   const { ws, rerender } = ctx;
   const form = h('div', {},
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Full name'),
-      h('input', { class: 'input', dataset: { f: 'name' }, placeholder: 'Who are you inviting' })),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Work email'),
-      h('input', { class: 'input', dataset: { f: 'email' }, type: 'email', placeholder: `name@${ws.id}.example` })),
-    h('label', { class: 'field' }, h('span', { class: 'field__label' }, 'Role'),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('team.fName')),
+      h('input', { class: 'input', dataset: { f: 'name' }, placeholder: t('team.fNamePh') })),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('team.fEmail')),
+      h('input', {
+        class: 'input', dataset: { f: 'email' }, type: 'email', dir: 'ltr',
+        placeholder: `name@${ws.id}.example`,
+      })),
+    h('label', { class: 'field' }, h('span', { class: 'field__label' }, t('team.fRole')),
       h('select', { class: 'select', dataset: { f: 'role' } },
-        ROLES.filter((r) => r !== 'owner').map((r) => h('option', { value: r, selected: r === 'member' }, r)))),
-    h('p', { class: 'hint' }, 'No email is sent — this demo adds the person straight to the workspace as a pending invite.'));
+        ROLES.filter((r) => r !== 'owner').map((r) => h('option', { value: r, selected: r === 'member' }, roleLabel(r))))),
+    h('p', { class: 'hint' }, t('team.inviteHint')));
 
   modal({
-    title: `Invite to ${ws.name}`,
+    title: t('team.inviteTitle', { name: ws.name }),
     body: form,
     actions: [
-      { label: 'Cancel' },
+      { label: t('common.cancel') },
       {
-        label: 'Send invite',
+        label: t('team.send'),
         class: 'btn--primary',
         onClick: (bodyEl) => {
           const get = (f) => bodyEl.querySelector(`[data-f="${f}"]`).value.trim();
           const name = get('name');
           const email = get('email');
-          if (!name) { toast('Give the invite a name', 'bad'); return true; }
-          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast('That email does not look right', 'bad'); return true; }
+          if (!name) { toast(t('team.needName'), 'bad'); return true; }
+          if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { toast(t('team.badEmail'), 'bad'); return true; }
           if (ws.members.some((m) => m.email.toLowerCase() === email.toLowerCase())) {
-            toast('That address already has access', 'bad'); return true;
+            toast(t('team.dupEmail'), 'bad'); return true;
           }
           store.update((s) => {
             s.workspaces[ws.id].members.push({
@@ -164,8 +173,8 @@ function invite(ctx) {
               lastActive: new Date().toISOString(),
             });
           });
-          logActivity(ws.id, 'team', `${name} invited as ${get('role')}`);
-          toast(`Invite recorded for ${name}`, 'ok');
+          logActivity(ws.id, 'team', 'invited', { name, role: get('role') });
+          toast(t('team.invited', { name }), 'ok');
           rerender();
         },
       },

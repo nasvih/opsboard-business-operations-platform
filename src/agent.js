@@ -5,6 +5,10 @@
    browser, from the workspace the user is currently looking at, so the
    numbers always agree with what is on screen and change the moment the
    user edits something.
+
+   Every sentence it says comes out of the dictionary, so the whole
+   conversation — greeting, chips, table headings, buttons and the note
+   under the box — reads in whichever language the app is set to.
    ============================================================ */
 
 import { Assistant } from '../lib/assistant.js';
@@ -13,12 +17,42 @@ import {
   store, activeWorkspace, WORKSPACE_IDS, STAGES, stageLabel, currencySymbol,
   quarterRevenue, revenueByMonth, pipelineValue, openDeals, overdueInvoices,
   outstandingValue, agingBuckets, invoiceAgeDays, seatsUsed, changesSince,
-  atRiskCustomers, customerName, monthKeys, logActivity,
+  atRiskCustomers, customerName, monthKeys, logActivity, dealTitle, activityText,
+  statusLabel, segmentLabel, roleLabel, permLabel, planLabel,
   CUSTOMER_STATUS, SEGMENTS, ROLES,
 } from './data.js';
+import { t, tList } from './main.js';
 
 const cur = (ws, n) => money(n, currencySymbol(ws.currency));
-const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : many || `${one}s`}`;
+
+/* a counted noun — English has two forms, Arabic five, the dictionary knows */
+const cnt = (n, key) => t(`count.${key}`, { n });
+
+/* the four suggestion chips, and the words the router matches them back to */
+const S = (key, vars) => t(`agent.sug.${key}`, vars);
+/* table headings, by dictionary key */
+const TH = (...keys) => keys.map((k) => t(`agent.th.${k}`));
+/* a row label inside a before/after table */
+const ROW = (key, vars) => t(`agent.row.${key}`, vars);
+
+/* Words the reading language adds to the always-on English patterns. On the
+   English side every one of these lists is empty, so nothing changes. */
+function dictWords(path) {
+  const list = tList(`agent.words.${path}`);
+  return Array.isArray(list) ? list : [];
+}
+const saysAny = (q, path) => dictWords(path).some((w) => String(q).includes(w));
+
+/* Keywords for the router. A phrase of more than one word becomes a pattern,
+   which the engine scores higher than a bare keyword — so a specific chip
+   ("top accounts by revenue") beats an intent that shares one word with it. */
+function extraMatch(id) {
+  const list = tList(`agent.match.${id}`);
+  if (!Array.isArray(list)) return [];
+  return list.map((w) => (String(w).includes(' ')
+    ? new RegExp(String(w).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    : String(w)));
+}
 
 function settledByCustomer(ws) {
   const totals = {};
@@ -45,13 +79,13 @@ function findDeal(ws, q) {
     const mine = ws.deals.filter((d) => d.customerId === cust.id);
     if (mine.length) return mine.sort((a, b) => b.value - a.value)[0];
   }
-  const named = ws.deals.find((d) => text.includes(d.title.toLowerCase().slice(0, 18)));
+  const named = ws.deals.find((d) => text.includes(dealTitle(ws, d).toLowerCase().slice(0, 18)));
   if (named) return named;
   /* superlatives — "who owns the biggest deal", "the smallest one" */
   const pool = openDeals(ws).length ? openDeals(ws) : ws.deals;
   if (!pool.length) return null;
   const byValue = pool.slice().sort((a, b) => b.value - a.value);
-  if (/\b(biggest|largest|highest|top|most valuable|best)\b/.test(text)) return byValue[0];
+  if (/\b(biggest|largest|highest|top|most valuable|best)\b/.test(text) || saysAny(q, 'biggest')) return byValue[0];
   if (/\b(smallest|lowest|least)\b/.test(text)) return byValue[byValue.length - 1];
   if (/\b(closest|soonest|next)\b/.test(text)) {
     return pool.slice().sort((a, b) => new Date(a.closeDate) - new Date(b.closeDate))[0];
@@ -63,8 +97,8 @@ function findDeal(ws, q) {
 function collection(ws) {
   const issued = ws.invoices.filter((i) => i.status !== 'draft');
   const settled = issued.filter((i) => i.status === 'paid');
-  const issuedValue = issued.reduce((t, i) => t + i.amount, 0);
-  const settledValue = settled.reduce((t, i) => t + i.amount, 0);
+  const issuedValue = issued.reduce((sum, i) => sum + i.amount, 0);
+  const settledValue = settled.reduce((sum, i) => sum + i.amount, 0);
   const days = settled.filter((i) => i.paidAt)
     .map((i) => Math.round((new Date(i.paidAt) - new Date(i.issuedAt)) / 86400000));
   return {
@@ -73,8 +107,8 @@ function collection(ws) {
     issuedValue,
     settledValue,
     rate: issuedValue ? (settledValue / issuedValue) * 100 : 0,
-    avgDays: days.length ? Math.round(days.reduce((t, d) => t + d, 0) / days.length) : 0,
-    avgTerms: issued.length ? Math.round(issued.reduce((t, i) => t + i.terms, 0) / issued.length) : 0,
+    avgDays: days.length ? Math.round(days.reduce((sum, d) => sum + d, 0) / days.length) : 0,
+    avgTerms: issued.length ? Math.round(issued.reduce((sum, i) => sum + i.terms, 0) / issued.length) : 0,
   };
 }
 
@@ -102,6 +136,7 @@ const STAGE_WORDS = [
 ];
 function parseStage(q) {
   for (const [id, re] of STAGE_WORDS) if (re.test(q)) return id;
+  for (const [id] of STAGE_WORDS) if (saysAny(q, `stage.${id}`)) return id;
   return null;
 }
 
@@ -112,32 +147,35 @@ const STATUS_WORDS = [
 ];
 function parseStatus(q) {
   for (const [id, re] of STATUS_WORDS) if (re.test(q)) return id;
+  for (const [id] of STATUS_WORDS) if (saysAny(q, `status.${id}`)) return id;
   return null;
 }
 
 function parseSegment(q) {
   const hit = SEGMENTS.find((s) => new RegExp(`\\b${s}\\b`, 'i').test(q));
-  return hit || null;
+  if (hit) return hit;
+  return SEGMENTS.find((s) => saysAny(q, `segment.${s}`)) || null;
 }
 
 function parseRole(q) {
   if (/\b(read[-\s]?only|view only)\b/i.test(q)) return 'viewer';
   const hit = ROLES.find((r) => new RegExp(`\\b${r}s?\\b`, 'i').test(q));
-  return hit || null;
+  if (hit) return hit;
+  return ROLES.find((r) => saysAny(q, `role.${r}`)) || null;
 }
 
 /* "4 lakh", "₹4,00,000", "2.5 crore", "250k", "400000" */
 function parseAmount(q) {
-  const t = String(q).toLowerCase().replace(/,/g, '');
-  let m = t.match(/(\d+(?:\.\d+)?)\s*(?:crores|crore|cr)\b/);
+  const text = String(q).toLowerCase().replace(/,/g, '');
+  let m = text.match(/(\d+(?:\.\d+)?)\s*(?:crores|crore|cr)\b/);
   if (m) return Math.round(parseFloat(m[1]) * 10000000);
-  m = t.match(/(\d+(?:\.\d+)?)\s*(?:lakhs|lakh|lacs|lac)\b/);
+  m = text.match(/(\d+(?:\.\d+)?)\s*(?:lakhs|lakh|lacs|lac)\b/);
   if (m) return Math.round(parseFloat(m[1]) * 100000);
-  m = t.match(/(\d+(?:\.\d+)?)\s*k\b/);
+  m = text.match(/(\d+(?:\.\d+)?)\s*k\b/);
   if (m) return Math.round(parseFloat(m[1]) * 1000);
-  m = t.match(/(?:₹|rs\.?|inr)\s*(\d+(?:\.\d+)?)/);
+  m = text.match(/(?:₹|rs\.?|inr)\s*(\d+(?:\.\d+)?)/);
   if (m) return Math.round(parseFloat(m[1]));
-  m = t.match(/\b(\d{4,})\b/);
+  m = text.match(/\b(\d{4,})\b/);
   if (m) return Number(m[1]);
   return null;
 }
@@ -148,12 +186,12 @@ const normalise = (s) => String(s).toLowerCase().replace(/[^a-z0-9\s]/g, ' ').re
    of them the sentence carries. A whole name wins outright; a single shared
    word ("hardware", "traders") is left ambiguous on purpose. */
 function customerMatches(ws, q) {
-  const t = ` ${normalise(q)} `;
+  const text = ` ${normalise(q)} `;
   return ws.customers.map((c) => {
     const full = normalise(c.name);
-    const words = full.split(' ').filter((w) => w.length > 2);
-    const hit = words.filter((w) => t.includes(` ${w} `)).length;
-    const score = (t.includes(` ${full} `) ? 100 : 0) + hit * 10 + (hit === words.length ? 5 : 0);
+    const parts = full.split(' ').filter((w) => w.length > 2);
+    const hit = parts.filter((w) => text.includes(` ${w} `)).length;
+    const score = (text.includes(` ${full} `) ? 100 : 0) + hit * 10 + (hit === parts.length ? 5 : 0);
     return { c, hit, score };
   }).filter((x) => x.hit > 0).sort((a, b) => b.score - a.score);
 }
@@ -168,8 +206,8 @@ function resolveCustomer(ws, q) {
 }
 
 function resolveDeal(ws, q) {
-  const t = normalise(q);
-  const byTitle = ws.deals.filter((d) => t.includes(normalise(d.title)));
+  const text = normalise(q);
+  const byTitle = ws.deals.filter((d) => text.includes(normalise(dealTitle(ws, d))));
   if (byTitle.length === 1) return { deal: byTitle[0] };
   const cm = resolveCustomer(ws, q);
   if (!cm.customer) return cm;
@@ -185,24 +223,30 @@ function resolveDeal(ws, q) {
 }
 
 function resolveInvoice(ws, q) {
-  const num2 = (String(q).match(/\b[A-Za-z]{2}-?\d{5,}\b/) || [])[0];
-  if (num2) {
-    const key = num2.replace(/-/g, '').toLowerCase();
+  const number = (String(q).match(/\b[A-Za-z]{2}-?\d{5,}\b/) || [])[0];
+  if (number) {
+    const key = number.replace(/-/g, '').toLowerCase();
     const hit = ws.invoices.find((i) => i.number.replace(/-/g, '').toLowerCase() === key);
-    return hit ? { invoice: hit } : { error: 'no-number', number: num2 };
+    return hit ? { invoice: hit } : { error: 'no-number', number };
   }
   const cm = resolveCustomer(ws, q);
+  const wantsBiggest = /\b(biggest|largest)\b/i.test(q) || saysAny(q, 'biggest');
+  const wantsSuperlative = /\b(oldest|most overdue|longest|biggest|largest|latest|newest)\b/i.test(q)
+    || /\boverdue\b/i.test(q) || saysAny(q, 'oldest') || saysAny(q, 'biggest') || saysAny(q, 'overdue');
   let pool = null;
   if (cm.customer) {
     pool = ws.invoices.filter((i) => i.customerId === cm.customer.id && i.status !== 'paid');
     if (!pool.length) return { error: 'nothing-open', customer: cm.customer };
-  } else if (/\b(oldest|most overdue|longest|biggest|largest|latest|newest)\b/i.test(q) || /\boverdue\b/i.test(q)) {
+  } else if (wantsSuperlative) {
     pool = overdueInvoices(ws).slice();
     if (!pool.length) pool = ws.invoices.filter((i) => i.status === 'sent');
     if (!pool.length) return { error: 'nothing-open' };
-    if (/\b(biggest|largest)\b/i.test(q)) pool.sort((a, b) => b.amount - a.amount);
+    if (wantsBiggest) pool.sort((a, b) => b.amount - a.amount);
     else pool.sort((a, b) => invoiceAgeDays(b) - invoiceAgeDays(a));
-    return { invoice: pool[0], picked: /\b(biggest|largest)\b/i.test(q) ? 'the largest one open' : 'the oldest one open' };
+    return {
+      invoice: pool[0],
+      picked: wantsBiggest ? t('agent.invPickedLargest') : t('agent.invPickedOldest'),
+    };
   } else {
     return { error: 'none' };
   }
@@ -224,6 +268,12 @@ function parsePerson(q) {
   let name = null;
   const m = String(q).match(/\b(?:invite|add|onboard|bring in|bring)\s+((?:[A-Z][\w'’-]+)(?:\s+[A-Z][\w'’-]+){0,2})/);
   if (m) name = m[1].trim();
+  /* An Arabic sentence carries the person's name in Latin script — it is a
+     name, not language — so the first capitalised run is the one meant. */
+  if (!name && /[؀-ۿ]/.test(String(q))) {
+    const latin = String(q).match(/([A-Z][\w'’-]+(?:\s+[A-Z][\w'’-]+){0,2})/);
+    if (latin) name = latin[1].trim();
+  }
   if (name) name = name.replace(/\s+(As|To|With|And|In)$/i, '').trim();
   if (!name && email) {
     const stem = email.split('@')[0].replace(/[._-]+/g, ' ').trim();
@@ -241,9 +291,9 @@ function report(wsId, screen, text, rows, meta, suggestions) {
   showScreen(screen);
   return {
     text,
-    table: rows ? { head: ['Field', 'Before', 'After'], rows } : null,
-    meta: meta || `applied · saved in this browser only`,
-    suggestions: suggestions || ['What changed this week?', 'What can you do?'],
+    table: rows ? { head: TH('field', 'before', 'after'), rows } : null,
+    meta: meta || t('agent.meta.applied'),
+    suggestions: suggestions || [S('changed'), S('whatCanYouDo')],
   };
 }
 
@@ -259,17 +309,18 @@ function applyDealMove(wsId, dealId, stage) {
     if (stage === 'lost') d.probability = 0;
   });
   const after = liveWs(wsId).deals.find((d) => d.id === dealId);
-  logActivity(wsId, 'deal', `Deal moved to ${stageLabel(stage)} — ${after.title}`);
-  toast(`Moved to ${stageLabel(stage)}`, 'ok');
+  const title = dealTitle(liveWs(wsId), after);
+  logActivity(wsId, 'deal', 'dealMoved', { stage, wsId, titleOf: dealId });
+  toast(t('deals.moved', { stage: stageLabel(stage) }), 'ok');
   return report(wsId, 'deals',
-    `Done. **${after.title}** is now in **${stageLabel(after.stage)}**.`,
+    t('agent.dealMoved', { title, stage: stageLabel(after.stage) }),
     [
-      ['Stage', stageLabel(before.stage), bold(stageLabel(after.stage))],
-      ['Probability', `${before.probability}%`, bold(`${after.probability}%`)],
-      ['Open pipeline', cur(ws, openBefore), bold(cur(ws, pipelineValue(liveWs(wsId))))],
+      [ROW('stage'), stageLabel(before.stage), bold(stageLabel(after.stage))],
+      [ROW('probability'), `${before.probability}%`, bold(`${after.probability}%`)],
+      [ROW('openPipeline'), cur(ws, openBefore), bold(cur(ws, pipelineValue(liveWs(wsId))))],
     ],
-    'deals · written to the activity feed',
-    ['Show the pipeline by stage', 'What changed this week?']);
+    t('agent.meta.deals'),
+    [S('pipeline'), S('changed')]);
 }
 
 function applyNote(wsId, customerId, text) {
@@ -280,16 +331,16 @@ function applyNote(wsId, customerId, text) {
     c.notes.unshift({ id: `n${Date.now().toString(36)}`, at: new Date().toISOString(), by: s.user.name, text });
   });
   const c = liveWs(wsId).customers.find((x) => x.id === customerId);
-  logActivity(wsId, 'note', `Note added on ${c.name}`);
-  toast('Note saved', 'ok');
+  logActivity(wsId, 'note', 'noteAdded', { name: c.name });
+  toast(t('customers.noteSaved'), 'ok');
   return report(wsId, 'customers',
-    `Saved against **${c.name}**. Open the account from the Customers table and it is at the top of the notes list.`,
+    t('agent.noteDone', { name: c.name }),
     [
-      ['Notes on file', String(before), bold(String(c.notes.length))],
-      ['Newest note', before ? ago(c.notes[1] ? c.notes[1].at : c.notes[0].at) : 'none', bold('just now')],
+      [ROW('notes'), String(before), bold(String(c.notes.length))],
+      [ROW('newest'), before ? ago(c.notes[1] ? c.notes[1].at : c.notes[0].at) : t('common.none'), bold(ROW('justNow'))],
     ],
-    'customers · note stored with your name',
-    ['Which customers are at risk?', 'What changed this week?']);
+    t('agent.meta.customers'),
+    [S('atRisk'), S('changed')]);
 }
 
 function applyInvoicePaid(wsId, invId) {
@@ -303,18 +354,20 @@ function applyInvoicePaid(wsId, invId) {
     i.paidAt = new Date().toISOString();
   });
   const after = liveWs(wsId).invoices.find((i) => i.id === invId);
-  logActivity(wsId, 'invoice', `Invoice ${after.number} marked paid`);
-  toast(`${after.number} settled`, 'ok');
+  logActivity(wsId, 'invoice', 'invoicePaid', { number: after.number });
+  toast(t('invoices.settledToast', { number: after.number }), 'ok');
   return report(wsId, 'invoices',
-    `**${after.number}** is settled — ${cur(ws, after.amount)} recorded against ${customerName(ws, after.customerId)}.`,
+    t('agent.invPaidDone', {
+      number: after.number, amount: cur(ws, after.amount), name: customerName(ws, after.customerId),
+    }),
     [
-      ['Status', before.status, bold('paid')],
-      ['Paid on', before.paidAt ? fmtDate(before.paidAt) : 'not paid', bold(fmtDate(after.paidAt))],
-      ['Outstanding', cur(ws, outBefore), bold(cur(ws, outstandingValue(liveWs(wsId))))],
-      ['Overdue invoices', String(lateBefore), bold(String(overdueInvoices(liveWs(wsId)).length))],
+      [ROW('status'), statusLabel(before.status), bold(statusLabel('paid'))],
+      [ROW('paidOn'), before.paidAt ? fmtDate(before.paidAt) : ROW('notPaid'), bold(fmtDate(after.paidAt))],
+      [ROW('outstanding'), cur(ws, outBefore), bold(cur(ws, outstandingValue(liveWs(wsId))))],
+      [ROW('overdueInvoices'), String(lateBefore), bold(String(overdueInvoices(liveWs(wsId)).length))],
     ],
-    'invoices · aging and reports recalculated',
-    ['Which invoices are overdue?', 'What is the collection rate?']);
+    t('agent.meta.invoicesRecalc'),
+    [S('overdue'), S('rate')]);
 }
 
 function applyInvoiceIssue(wsId, invId) {
@@ -327,15 +380,16 @@ function applyInvoiceIssue(wsId, invId) {
     i.dueAt = new Date(Date.now() + i.terms * 86400000).toISOString();
   });
   const after = liveWs(wsId).invoices.find((i) => i.id === invId);
-  logActivity(wsId, 'invoice', `Invoice ${after.number} issued to ${customerName(ws, after.customerId)}`);
-  toast(`${after.number} issued`, 'ok');
+  const who = customerName(ws, after.customerId);
+  logActivity(wsId, 'invoice', 'invoiceIssued', { number: after.number, name: who });
+  toast(t('invoices.issuedToast', { number: after.number }), 'ok');
   return report(wsId, 'invoices',
-    `**${after.number}** has been issued to ${customerName(ws, after.customerId)}. Ask me to mark it paid once the money lands.`,
+    t('agent.invIssuedDone', { number: after.number, name: who }),
     [
-      ['Status', before.status, bold('sent')],
-      ['Due', fmtDate(before.dueAt), bold(fmtDate(after.dueAt))],
+      [ROW('status'), statusLabel(before.status), bold(statusLabel('sent'))],
+      [ROW('due'), fmtDate(before.dueAt), bold(fmtDate(after.dueAt))],
     ],
-    'invoices · terms taken from the account');
+    t('agent.meta.invoiceTerms'));
 }
 
 function applyCustomerChange(wsId, customerId, changes) {
@@ -347,21 +401,22 @@ function applyCustomerChange(wsId, customerId, changes) {
     Object.assign(c, changes);
   });
   const after = liveWs(wsId).customers.find((c) => c.id === customerId);
-  const words = [];
-  if (changes.status) words.push(`marked ${changes.status}`);
-  if (changes.segment) words.push(`moved to ${changes.segment}`);
-  logActivity(wsId, 'customer', `${after.name} ${words.join(' and ')}`);
-  toast(`${after.name} updated`, 'ok');
+  const did = [];
+  if (changes.status) did.push(t('agent.custDidStatus', { status: statusLabel(changes.status) }));
+  if (changes.segment) did.push(t('agent.custDidSegment', { segment: segmentLabel(changes.segment) }));
+  const words = did.join(t('common.and'));
+  logActivity(wsId, 'customer', 'customerChanged', { name: after.name, words });
+  toast(t('agent.custToast', { name: after.name }), 'ok');
   const rows = [];
-  if (changes.status) rows.push(['Status', before.status, bold(after.status)]);
-  if (changes.segment) rows.push(['Segment', before.segment, bold(after.segment)]);
-  rows.push(['Accounts at risk', String(riskBefore),
+  if (changes.status) rows.push([ROW('status'), statusLabel(before.status), bold(statusLabel(after.status))]);
+  if (changes.segment) rows.push([ROW('segment'), segmentLabel(before.segment), bold(segmentLabel(after.segment))]);
+  rows.push([ROW('atRisk'), String(riskBefore),
     bold(String(liveWs(wsId).customers.filter((c) => c.status === 'at-risk').length))]);
   return report(wsId, 'customers',
-    `**${after.name}** has been ${words.join(' and ')}. The Customers table and the at-risk list both show it now.`,
+    t('agent.custDone', { name: after.name, words }),
     rows,
-    'customers · status filter picks it up immediately',
-    ['Which customers are at risk?', 'Top accounts by revenue']);
+    t('agent.meta.customerStatus'),
+    [S('atRisk'), S('top')]);
 }
 
 function applyInvite(wsId, person) {
@@ -381,19 +436,20 @@ function applyInvite(wsId, person) {
     });
   });
   const after = liveWs(wsId);
-  logActivity(wsId, 'team', `${person.name} invited as ${person.role}`);
-  toast(`Invite recorded for ${person.name}`, 'ok');
+  logActivity(wsId, 'team', 'invited', { name: person.name, role: person.role });
+  toast(t('agent.invToast', { name: person.name }), 'ok');
   const used = seatsUsed(after);
   return report(wsId, 'team',
-    `**${person.name}** is on the Team screen as a pending ${person.role}. No email leaves the browser — this demo records the invite and nothing else.`,
+    t('agent.invDone', { name: person.name, role: roleLabel(person.role) }),
     [
-      ['People', String(usedBefore), bold(String(used))],
-      ['Seats', `${usedBefore} of ${ws.seatsIncluded}`, bold(`${used} of ${ws.seatsIncluded}`)],
-      ['Pending invites', String(pendingBefore),
+      [ROW('people'), String(usedBefore), bold(String(used))],
+      [ROW('seats'), ROW('seatsOf', { used: usedBefore, total: ws.seatsIncluded }),
+        bold(ROW('seatsOf', { used, total: ws.seatsIncluded }))],
+      [ROW('pending'), String(pendingBefore),
         bold(String(after.members.filter((m) => m.status === 'invited').length))],
     ],
-    'team and roles · role can be changed on that screen',
-    ['Who has admin access?', 'How many seats are left?']);
+    t('agent.meta.team'),
+    [S('admin'), S('seats')]);
 }
 
 function applyNewDeal(wsId, spec) {
@@ -405,6 +461,7 @@ function applyNewDeal(wsId, spec) {
       id,
       ws: wsId,
       title: spec.title,
+      kindKey: spec.title ? undefined : 'new',
       customerId: spec.customerId,
       stage: spec.stage,
       value: spec.value,
@@ -416,17 +473,20 @@ function applyNewDeal(wsId, spec) {
     });
   });
   const after = liveWs(wsId);
-  logActivity(wsId, 'deal', `Deal created — ${spec.title}`);
-  toast('Deal added to the pipeline', 'ok');
+  const title = dealTitle(after, after.deals.find((d) => d.id === id));
+  logActivity(wsId, 'deal', 'dealCreated', { wsId, titleOf: id });
+  toast(t('deals.added'), 'ok');
   return report(wsId, 'deals',
-    `**${spec.title}** is on the board in ${stageLabel(spec.stage)}, worth ${cur(ws, spec.value)} and owned by ${spec.owner}.`,
+    t('agent.newDone', {
+      title, stage: stageLabel(spec.stage), amount: cur(ws, spec.value), owner: spec.owner,
+    }),
     [
-      ['Open deals', String(before.count), bold(String(openDeals(after).length))],
-      ['Open pipeline', cur(ws, before.value), bold(cur(ws, pipelineValue(after)))],
-      ['Close date', 'not set', bold(fmtDate(new Date(Date.now() + 30 * 86400000)))],
+      [ROW('openDeals'), String(before.count), bold(String(openDeals(after).length))],
+      [ROW('openPipeline'), cur(ws, before.value), bold(cur(ws, pipelineValue(after)))],
+      [ROW('closeDate'), ROW('notSet'), bold(fmtDate(new Date(Date.now() + 30 * 86400000)))],
     ],
-    'deals · 30 day close date, change it on the board',
-    ['Show the pipeline by stage', 'Who owns the biggest deal?']);
+    t('agent.meta.newDeal'),
+    [S('pipeline'), S('biggest')]);
 }
 
 /* ---------- when the reference is not good enough, say so ---------- */
@@ -434,17 +494,23 @@ function applyNewDeal(wsId, spec) {
 function askForAccount(ws, res, what) {
   if (res.error === 'ambiguous') {
     return {
-      text: `That could be ${res.options.map((c) => bold(c.name)).join(' or ')}. Give me the full account name and I will ${what} the right one. Nothing has changed.`,
-      suggestions: ['What can you do?', 'Which customers are at risk?'],
+      text: t('agent.askAmbiguous', {
+        options: res.options.map((c) => bold(c.name)).join(t('common.or')), what,
+      }),
+      suggestions: [S('whatCanYouDo'), S('atRisk')],
     };
   }
   return {
-    text: `I could not find that account in **${ws.name}**, so I have changed nothing. Name one of these and I will ${what} it.`,
-    table: { head: ['Accounts in this workspace'], rows: (res.options || ws.customers.slice(0, 6)).map((c) => [c.name]) },
-    suggestions: ['What can you do?', 'Top accounts by revenue'],
+    text: t('agent.askNone', { name: ws.name, what }),
+    table: { head: TH('accountsHere'), rows: (res.options || ws.customers.slice(0, 6)).map((c) => [c.name]) },
+    suggestions: [S('whatCanYouDo'), S('top')],
   };
 }
 
+/* The dictionary is not readable while this module is evaluating — main.js is
+   still building the i18n instance at that moment — so the intent pack is
+   assembled on the first call instead of at import time. */
+function buildIntents() {
 const actionIntents = [
   {
     id: 'act-move-deal',
@@ -453,41 +519,51 @@ const actionIntents = [
       /\b(deal|opportunity)\b[^?]{0,60}\b(to|into|onto)\b\s*(qualify|qualification|proposal|negotiation|won|lost)/i,
       /\bmark\b[^?]{0,50}\b(deal|opportunity)\b[^?]{0,24}\b(won|lost)\b/i,
       'move the deal', 'move deal',
+      ...extraMatch('moveDeal'),
     ],
-    trace: 'matched the sentence against this workspace’s deals',
+    trace: t('agent.trace.deal'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const found = resolveDeal(ws, q);
       if (!found.deal) {
         if (found.error === 'many-deals') {
           return {
-            text: `**${found.customer.name}** has ${found.deals.length} deals I could move, so I will not guess. Name the one you mean and I will move it.`,
-            table: { head: ['Deal', 'Stage', 'Value'], rows: found.deals.map((d) => [d.title, stageLabel(d.stage), cur(ws, d.value)]) },
+            text: t('agent.dealMany', { name: found.customer.name, n: found.deals.length }),
+            table: {
+              head: TH('deal', 'stage', 'value'),
+              rows: found.deals.map((d) => [dealTitle(ws, d), stageLabel(d.stage), cur(ws, d.value)]),
+            },
           };
         }
         if (found.error === 'no-deals') {
-          return { text: `**${found.customer.name}** has no deal on the board, so there is nothing to move. I can create one — try "new deal for ${found.customer.name}, 4 lakh, proposal stage".` };
+          return { text: t('agent.dealNone', { name: found.customer.name }) };
         }
-        return askForAccount(ws, found, 'move the deal for');
+        return askForAccount(ws, found, t('agent.whatMoveDeal'));
       }
       const deal = found.deal;
-      const head = `That is **${deal.title}** — ${stageLabel(deal.stage)}, ${cur(ws, deal.value)}, owned by ${deal.owner}.`;
+      const head = t('agent.dealHead', {
+        title: dealTitle(ws, deal), stage: stageLabel(deal.stage), amount: cur(ws, deal.value), owner: deal.owner,
+      });
       const stage = parseStage(q);
       if (!stage) {
         return {
-          text: `${head}\n\nWhich stage should it go to? Nothing moves until you pick one.`,
+          text: t('agent.dealWhich', { head }),
           actions: STAGES.filter((s) => s.id !== deal.stage).map((s) => ({
-            label: s.label, doingLabel: 'Moving…', run: () => applyDealMove(ws.id, deal.id, s.id),
+            label: stageLabel(s.id), doingLabel: t('agent.dealMoving'), run: () => applyDealMove(ws.id, deal.id, s.id),
           })),
         };
       }
       if (stage === deal.stage) {
-        return { text: `${head}\n\nIt is already in ${stageLabel(stage)}, so there is nothing for me to change.` };
+        return { text: t('agent.dealSame', { head, stage: stageLabel(stage) }) };
       }
       return {
-        text: `${head}\n\nI can move it to **${stageLabel(stage)}**. Nothing has changed yet — press the button and I will apply it.`,
-        actions: [{ label: `Move to ${stageLabel(stage)}`, doingLabel: 'Moving…', run: () => applyDealMove(ws.id, deal.id, stage) }],
-        suggestions: ['Show the pipeline by stage', 'What can you do?'],
+        text: t('agent.dealOffer', { head, stage: stageLabel(stage) }),
+        actions: [{
+          label: t('agent.dealMoveTo', { stage: stageLabel(stage) }),
+          doingLabel: t('agent.dealMoving'),
+          run: () => applyDealMove(ws.id, deal.id, stage),
+        }],
+        suggestions: [S('pipeline'), S('whatCanYouDo')],
       };
     },
   },
@@ -497,24 +573,25 @@ const actionIntents = [
       /\b(log|add|save|record|write|leave|jot|put|note down)\b[^?]{0,40}\bnote\b/i,
       /\bnote\b[^?]{0,24}\b(on|against|for|about)\b/i,
       'log a note', 'add a note',
+      ...extraMatch('note'),
     ],
-    trace: 'matched the account book, then read the note text',
+    trace: t('agent.trace.note'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const text = parseNoteText(q);
       const subject = text ? String(q).slice(0, String(q).length - text.length) : q;
       const res = resolveCustomer(ws, subject);
-      if (!res.customer) return askForAccount(ws, res, 'write the note against');
+      if (!res.customer) return askForAccount(ws, res, t('agent.whatNote'));
       const c = res.customer;
       if (!text) {
         return {
-          text: `I have the account: **${c.name}**, owned by ${c.owner}, ${c.notes.length} notes on file.\n\nWhat should the note say? Write it after a colon — "log a note on ${c.name}: they asked for 45 day terms".`,
-          suggestions: ['What can you do?', 'Which customers are at risk?'],
+          text: t('agent.noteHave', { name: c.name, owner: c.owner, n: c.notes.length }),
+          suggestions: [S('whatCanYouDo'), S('atRisk')],
         };
       }
       return {
-        text: `Note for **${c.name}**, filed under your name:\n\n"${text}"\n\nNothing is saved until you press the button.`,
-        actions: [{ label: 'Save the note', doingLabel: 'Saving…', run: () => applyNote(ws.id, c.id, text) }],
+        text: t('agent.noteReady', { name: c.name, text }),
+        actions: [{ label: t('agent.noteSave'), doingLabel: t('agent.noteSaving'), run: () => applyNote(ws.id, c.id, text) }],
       };
     },
   },
@@ -525,48 +602,62 @@ const actionIntents = [
       /\b(settle|clear|record (?:a )?payment|payment (?:came|landed|received))\b[^?]{0,50}\b(invoice|bill|[a-z]{2}-?\d{5,})\b/i,
       /\binvoice\b[^?]{0,40}\b(paid|settled|cleared)\b/i,
       'mark paid', 'mark it paid',
+      ...extraMatch('invoicePaid'),
     ],
-    trace: 'looked the invoice up in the receivables ledger',
+    trace: t('agent.trace.invoice'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const res = resolveInvoice(ws, q);
+      const openRows = () => ({
+        head: TH('invoice', 'account', 'status', 'amount'),
+        rows: ws.invoices.filter((i) => i.status !== 'paid').slice(0, 6)
+          .map((i) => [i.number, customerName(ws, i.customerId), statusLabel(i.status), cur(ws, i.amount)]),
+      });
       if (!res.invoice) {
         if (res.error === 'no-number') {
           return {
-            text: `There is no invoice numbered \`${res.number}\` in **${ws.name}**, so I have changed nothing. These are the open ones.`,
-            table: { head: ['Invoice', 'Account', 'Status', 'Amount'], rows: ws.invoices.filter((i) => i.status !== 'paid').slice(0, 6).map((i) => [i.number, customerName(ws, i.customerId), i.status, cur(ws, i.amount)]) },
+            text: t('agent.invNoNumber', { number: res.number, name: ws.name }),
+            table: openRows(),
           };
         }
         if (res.error === 'many-invoices') {
           return {
-            text: `**${res.customer.name}** has ${res.invoices.length} unpaid invoices. Give me the number and I will settle that one — I am not going to pick for you.`,
-            table: { head: ['Invoice', 'Status', 'Days late', 'Amount'], rows: res.invoices.map((i) => [i.number, i.status, i.status === 'overdue' ? String(invoiceAgeDays(i)) : '—', cur(ws, i.amount)]) },
+            text: t('agent.invMany', { name: res.customer.name, n: res.invoices.length }),
+            table: {
+              head: TH('invoice', 'status', 'daysLate', 'amount'),
+              rows: res.invoices.map((i) => [i.number, statusLabel(i.status),
+                i.status === 'overdue' ? String(invoiceAgeDays(i)) : t('common.dash'), cur(ws, i.amount)]),
+            },
           };
         }
         if (res.error === 'nothing-open') {
-          return { text: res.customer ? `Every invoice for **${res.customer.name}** is already settled, so there is nothing to mark paid.` : `Nothing is open in **${ws.name}** right now, so there is nothing to mark paid.` };
+          return {
+            text: res.customer
+              ? t('agent.invNoneCust', { name: res.customer.name })
+              : t('agent.invNoneWs', { name: ws.name }),
+          };
         }
-        return {
-          text: `Which invoice? Give me a number, or the account name, or say "mark the oldest overdue invoice paid". Nothing has changed.`,
-          table: { head: ['Invoice', 'Account', 'Status', 'Amount'], rows: ws.invoices.filter((i) => i.status !== 'paid').slice(0, 6).map((i) => [i.number, customerName(ws, i.customerId), i.status, cur(ws, i.amount)]) },
-        };
+        return { text: t('agent.invWhich'), table: openRows() };
       }
       const inv = res.invoice;
       const who = customerName(ws, inv.customerId);
       if (inv.status === 'paid') {
-        return { text: `**${inv.number}** was already settled on ${fmtDate(inv.paidAt)} for ${cur(ws, inv.amount)}. Nothing to do.` };
+        return { text: t('agent.invAlready', { number: inv.number, date: fmtDate(inv.paidAt), amount: cur(ws, inv.amount) }) };
       }
       if (inv.status === 'draft') {
         return {
-          text: `**${inv.number}** for ${who} is still a draft — it has never been issued, so it cannot be paid. I can issue it first, on today's date with ${inv.terms} day terms.`,
-          actions: [{ label: 'Issue it now', doingLabel: 'Issuing…', run: () => applyInvoiceIssue(ws.id, inv.id) }],
+          text: t('agent.invDraft', { number: inv.number, name: who, n: inv.terms }),
+          actions: [{ label: t('agent.invIssueNow'), doingLabel: t('agent.invIssuing'), run: () => applyInvoiceIssue(ws.id, inv.id) }],
         };
       }
-      const late = inv.status === 'overdue' ? ` It is ${invoiceAgeDays(inv)} days past due.` : '';
+      const late = inv.status === 'overdue' ? t('agent.invLate', { n: invoiceAgeDays(inv) }) : '';
       return {
-        text: `${res.picked ? `You did not name one, so I took ${res.picked}: ` : ''}**${inv.number}** — ${who}, ${cur(ws, inv.amount)}, due ${fmtDate(inv.dueAt)}.${late}\n\nI will record it as paid today. Nothing has changed yet.`,
-        actions: [{ label: 'Mark it paid', doingLabel: 'Recording…', run: () => applyInvoicePaid(ws.id, inv.id) }],
-        suggestions: ['Which invoices are overdue?', 'What is the collection rate?'],
+        text: t('agent.invOffer', {
+          picked: res.picked ? t('agent.invPickedLead', { picked: res.picked }) : '',
+          number: inv.number, name: who, amount: cur(ws, inv.amount), date: fmtDate(inv.dueAt), late,
+        }),
+        actions: [{ label: t('agent.invMarkPaid'), doingLabel: t('agent.invRecording'), run: () => applyInvoicePaid(ws.id, inv.id) }],
+        suggestions: [S('overdue'), S('rate')],
       };
     },
   },
@@ -578,38 +669,49 @@ const actionIntents = [
       /\b(segment|reclassify)\b[^?]{0,50}\b(retail|wholesale|institutional|online|government)\b/i,
       /\b(move|change|switch|set|put)\b[^?]{0,50}\b(to|into|as)\b[^?]{0,20}\b(retail|wholesale|institutional|online|government)\b/i,
       'flag', 'as at risk', 'as dormant', 'as active',
+      ...extraMatch('customerStatus'),
     ],
-    trace: 'read the account record before proposing the change',
+    trace: t('agent.trace.customer'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const res = resolveCustomer(ws, q);
-      if (!res.customer) return askForAccount(ws, res, 'change');
+      if (!res.customer) return askForAccount(ws, res, t('agent.whatChange'));
       const c = res.customer;
       const status = parseStatus(q);
       const segment = parseSegment(q);
       if (!status && !segment) {
         return {
-          text: `I have **${c.name}** — ${c.segment}, currently ${c.status}. What should it become? Status can be ${CUSTOMER_STATUS.join(', ')}; segment can be ${SEGMENTS.join(', ')}.`,
-          suggestions: ['What can you do?', 'Which customers are at risk?'],
+          text: t('agent.custWhat', {
+            name: c.name,
+            segment: segmentLabel(c.segment),
+            status: statusLabel(c.status),
+            statuses: CUSTOMER_STATUS.map(statusLabel).join(', '),
+            segments: SEGMENTS.map(segmentLabel).join(', '),
+          }),
+          suggestions: [S('whatCanYouDo'), S('atRisk')],
         };
       }
       const changes = {};
       if (status && status !== c.status) changes.status = status;
       if (segment && segment !== c.segment) changes.segment = segment;
       if (!Object.keys(changes).length) {
-        return { text: `**${c.name}** is already ${status || ''}${status && segment ? ' and ' : ''}${segment || ''}. Nothing to change.` };
+        const what = [status ? statusLabel(status) : '', segment ? segmentLabel(segment) : '']
+          .filter(Boolean).join(t('common.and'));
+        return { text: t('agent.custSame', { name: c.name, what }) };
       }
       const words = [];
-      if (changes.status) words.push(`status **${c.status} → ${changes.status}**`);
-      if (changes.segment) words.push(`segment **${c.segment} → ${changes.segment}**`);
+      if (changes.status) words.push(t('agent.custWordStatus', { from: statusLabel(c.status), to: statusLabel(changes.status) }));
+      if (changes.segment) words.push(t('agent.custWordSegment', { from: segmentLabel(c.segment), to: segmentLabel(changes.segment) }));
       return {
-        text: `**${c.name}** (owned by ${c.owner}) — I would change ${words.join(' and ')}. Nothing has changed yet.`,
+        text: t('agent.custOffer', { name: c.name, owner: c.owner, words: words.join(t('common.and')) }),
         actions: [{
-          label: changes.status ? `Mark ${changes.status}` : `Move to ${changes.segment}`,
-          doingLabel: 'Updating…',
+          label: changes.status
+            ? t('agent.custMark', { status: statusLabel(changes.status) })
+            : t('agent.custMove', { segment: segmentLabel(changes.segment) }),
+          doingLabel: t('agent.custUpdating'),
           run: () => applyCustomerChange(ws.id, c.id, changes),
         }],
-        suggestions: ['Which customers are at risk?', 'What can you do?'],
+        suggestions: [S('atRisk'), S('whatCanYouDo')],
       };
     },
   },
@@ -620,36 +722,47 @@ const actionIntents = [
       /\binvite\b[^?]{0,60}\b(as|to|with|and)\b/i,
       /\b(add|onboard|bring in|give access to)\b[^?]{0,50}\b(to the (team|workspace)|as an? (owner|admin|member|viewer))\b/i,
       'invite', 'add a user',
+      ...extraMatch('invite'),
     ],
-    trace: 'checked the member list and the seat allowance',
+    trace: t('agent.trace.invite'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const person = parsePerson(q);
       const role = parseRole(q) || 'member';
       if (!person.name) {
         return {
-          text: `Who am I inviting to **${ws.name}**? Give me a name and a role — "invite Priya Menon as an admin". Roles are ${ROLES.filter((r) => r !== 'owner').join(', ')}.`,
-          suggestions: ['Who has admin access?', 'How many seats are left?'],
+          text: t('agent.invWho', { name: ws.name, roles: ROLES.filter((r) => r !== 'owner').map(roleLabel).join(', ') }),
+          suggestions: [S('admin'), S('seats')],
         };
       }
       if (role === 'owner') {
-        return { text: `I will not hand ownership of **${ws.name}** to anyone from a chat box. Invite ${person.name} as an admin instead, or change the owner on the Team screen.` };
+        return { text: t('agent.invNoOwner', { name: ws.name, person: person.name }) };
       }
       const domain = (ws.members[0] && ws.members[0].email.split('@')[1]) || `${ws.id}.example`;
       const email = person.email || `${person.name.split(' ')[0].toLowerCase()}@${domain}`;
       const clash = ws.members.find((m) => m.email.toLowerCase() === email.toLowerCase());
       if (clash) {
-        return { text: `**${clash.name}** already holds \`${clash.email}\` in this workspace as a ${clash.role}. Add a different address and I will send it.` };
+        return { text: t('agent.invClash', { name: clash.name, email: clash.email, role: roleLabel(clash.role) }) };
       }
       const used = seatsUsed(ws);
       const over = used + 1 > ws.seatsIncluded;
-      const article = /^[aeiou]/i.test(role) ? 'an' : 'a';
       return {
-        text: `Invite for **${person.name}** as ${article} **${role}**, email \`${email}\`${person.email ? '' : ' (built from the workspace domain — say the address if it is different)'}.\n`
-          + `Seats would go from ${used} to ${used + 1} of ${ws.seatsIncluded}.${over ? ' That is over the plan allowance — change the plan in Settings.' : ''}\n\n`
-          + 'No email is sent anywhere. Press the button and I will record the invite.',
-        actions: [{ label: `Invite as ${role}`, doingLabel: 'Inviting…', run: () => applyInvite(ws.id, { name: person.name, email, role }) }],
-        suggestions: ['Who has admin access?', 'How many seats are left?'],
+        text: t('agent.inviteOffer', {
+          person: person.name,
+          role: roleLabel(role),
+          email,
+          guessed: !person.email,
+          used,
+          next: used + 1,
+          total: ws.seatsIncluded,
+          over,
+        }),
+        actions: [{
+          label: t('agent.invAs', { role: roleLabel(role) }),
+          doingLabel: t('agent.invInviting'),
+          run: () => applyInvite(ws.id, { name: person.name, email, role }),
+        }],
+        suggestions: [S('admin'), S('seats')],
       };
     },
   },
@@ -659,36 +772,41 @@ const actionIntents = [
       /\b(new|create|open|start|add|raise|set up|log)\b[^?]{0,30}\b(deal|opportunity)\b/i,
       /\bdeal for\b/i,
       'new deal', 'create a deal',
+      ...extraMatch('newDeal'),
     ],
-    trace: 'read the account, the value and the stage out of the sentence',
+    trace: t('agent.trace.newDeal'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const res = resolveCustomer(ws, q);
-      if (!res.customer) return askForAccount(ws, res, 'open a deal for');
+      if (!res.customer) return askForAccount(ws, res, t('agent.whatNewDeal'));
       const c = res.customer;
       const value = parseAmount(q);
       const stage = parseStage(q) || 'qualify';
       if (!value) {
         return {
-          text: `**${c.name}** it is. How much is the deal worth? Say it however you like — "4 lakh", "₹400000", "250k" — and I will put it in ${stageLabel(stage)}.`,
-          suggestions: ['What can you do?', 'Show the pipeline by stage'],
+          text: t('agent.newValue', { name: c.name, stage: stageLabel(stage) }),
+          suggestions: [S('whatCanYouDo'), S('pipeline')],
         };
       }
       const what = (String(q).match(/\bfor\b[^,]*,\s*[^,]*,\s*([a-z\s]+?)\s*(?:stage)?\s*$/i) || [])[1];
-      const title = `${c.name} — ${(what && !parseStage(what) ? what.trim() : 'new opportunity')}`;
+      /* a description the reader typed is kept as they wrote it; without one the
+         deal stores a key, so it still reads in whichever language is on */
+      const typed = what && !parseStage(what) ? what.trim() : '';
+      const title = typed ? `${c.name} — ${typed}` : undefined;
       return {
-        text: `Here is what I understood:\n\n`
-          + `- account **${c.name}** (${c.segment}, owner ${c.owner})\n`
-          + `- value **${cur(ws, value)}**\n`
-          + `- stage **${stageLabel(stage)}**\n`
-          + `- close date 30 days out, probability 40%\n\n`
-          + 'Nothing is on the board until you press the button.',
+        text: t('agent.newOffer', {
+          name: c.name,
+          segment: segmentLabel(c.segment),
+          owner: c.owner,
+          amount: cur(ws, value),
+          stage: stageLabel(stage),
+        }),
         actions: [{
-          label: 'Create the deal',
-          doingLabel: 'Creating…',
+          label: t('agent.newCreate'),
+          doingLabel: t('agent.newCreating'),
           run: () => applyNewDeal(ws.id, { customerId: c.id, title, value, stage, owner: c.owner }),
         }],
-        suggestions: ['Show the pipeline by stage', 'Who owns the biggest deal?'],
+        suggestions: [S('pipeline'), S('biggest')],
       };
     },
   },
@@ -700,336 +818,423 @@ const intents = [
   ...actionIntents,
   {
     id: 'revenue',
-    match: [/revenue|turnover|collect(ed|s)?\b|billed|how much did we (make|bill)|this quarter|q[1-4]\b/i],
-    trace: 'summed settled invoices in this workspace',
+    match: [/revenue|turnover|collect(ed|s)?\b|billed|how much did we (make|bill)|this quarter|q[1-4]\b/i, ...extraMatch('revenue')],
+    trace: t('agent.trace.revenue'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const qr = quarterRevenue(ws);
       const months = revenueByMonth(ws, 6);
       const last = months[months.length - 1];
-      const prev = months[months.length - 2] || { value: 0, label: '—' };
+      const prev = months[months.length - 2] || { value: 0, label: t('common.dash') };
       const delta = prev.value ? ((last.value - prev.value) / prev.value) * 100 : 0;
       return {
-        text: `**${ws.name}** settled **${cur(ws, qr.total)}** in ${qr.label} across ${plural(qr.count, 'invoice')}.\n`
-          + `${last.label} to date is at ${cur(ws, last.value)}, ${delta >= 0 ? 'up' : 'down'} ${pct(Math.abs(delta), 1)} on ${prev.label}.\n`
-          + `Still outstanding: ${cur(ws, outstandingValue(ws))}.`,
+        text: t('agent.revenue', {
+          name: ws.name,
+          total: cur(ws, qr.total),
+          q: qr.label,
+          invoices: cnt(qr.count, 'invoice'),
+          month: last.label,
+          amount: cur(ws, last.value),
+          dir: delta >= 0 ? t('agent.revenueUp') : t('agent.revenueDown'),
+          pct: pct(Math.abs(delta), 1),
+          prev: prev.label,
+          out: cur(ws, outstandingValue(ws)),
+        }),
         table: {
-          head: ['Month', 'Settled'],
+          head: TH('month', 'settled'),
           rows: months.map((m) => [m.label, cur(ws, m.value)]),
         },
-        meta: `read ${ws.invoices.length} invoices · ${ws.name}`,
-        suggestions: ['Which invoices are overdue?', 'Show the pipeline by stage', 'Top accounts by revenue'],
+        meta: t('agent.meta.readInvoices', { n: ws.invoices.length, name: ws.name }),
+        suggestions: [S('overdue'), S('pipeline'), S('top')],
       };
     },
   },
   {
     id: 'overdue',
-    match: [/overdue|late|unpaid|past due|receivable|aging|ageing|chase/i, 'overdue', 'unpaid'],
-    trace: 'checked due dates against today',
+    match: [/overdue|late|unpaid|past due|receivable|aging|ageing|chase/i, 'overdue', 'unpaid', ...extraMatch('overdue')],
+    trace: t('agent.trace.overdue'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const list = overdueInvoices(ws).sort((a, b) => invoiceAgeDays(b) - invoiceAgeDays(a));
       if (!list.length) {
-        return { text: `Nothing is overdue in **${ws.name}** right now. Open receivables sit at ${cur(ws, outstandingValue(ws))}.` };
+        return { text: t('agent.overdueNone', { name: ws.name, amount: cur(ws, outstandingValue(ws)) }) };
       }
-      const total = list.reduce((t, i) => t + i.amount, 0);
+      const total = list.reduce((sum, i) => sum + i.amount, 0);
       const buckets = agingBuckets(ws);
       return {
-        text: `**${plural(list.length, 'invoice')}** past due in ${ws.name}, worth **${cur(ws, total)}**.\n`
-          + `The oldest is ${list[0].number} for ${customerName(ws, list[0].customerId)}, ${invoiceAgeDays(list[0])} days late.\n`
-          + `Aging: ${buckets.slice(1).map((b) => `${b.label} ${cur(ws, b.total)}`).join(' · ')}.`,
+        text: t('agent.overdueBody', {
+          invoices: cnt(list.length, 'invoice'),
+          name: ws.name,
+          total: cur(ws, total),
+          number: list[0].number,
+          account: customerName(ws, list[0].customerId),
+          n: invoiceAgeDays(list[0]),
+          aging: buckets.slice(1).map((b) => `${b.label} ${cur(ws, b.total)}`).join(' · '),
+        }),
         table: {
-          head: ['Invoice', 'Account', 'Days late', 'Amount'],
+          head: TH('invoice', 'account', 'daysLate', 'amount'),
           rows: list.slice(0, 6).map((i) => [i.number, customerName(ws, i.customerId), String(invoiceAgeDays(i)), cur(ws, i.amount)]),
         },
-        suggestions: ['Which customers are at risk?', 'What is the collection rate?', 'What changed this week?'],
+        suggestions: [S('atRisk'), S('rate'), S('changed')],
       };
     },
   },
   {
     id: 'collection',
     match: [/collection rate|collections|how much have we collected|settled vs issued|paid vs issued|\bdso\b|days to pay|(quickly|fast|long).{0,24}(pay|paid|settle)|payment behaviour|payment behavior/i,
-      'collection rate', 'collection'],
-    trace: 'compared settled invoice value against everything issued',
+      'collection rate', 'collection', ...extraMatch('collection')],
+    trace: t('agent.trace.collection'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const c = collection(ws);
-      if (!c.issued.length) return { text: `Nothing has been issued in **${ws.name}** yet, so there is no collection rate to report.` };
+      if (!c.issued.length) return { text: t('agent.collectionNone', { name: ws.name }) };
       const late = overdueInvoices(ws);
       const counts = ['paid', 'sent', 'overdue', 'draft'].map((s) => {
         const rows = ws.invoices.filter((i) => i.status === s);
-        return [s, String(rows.length), cur(ws, rows.reduce((t, i) => t + i.amount, 0))];
+        return [statusLabel(s), String(rows.length), cur(ws, rows.reduce((sum, i) => sum + i.amount, 0))];
       });
       return {
-        text: `**${ws.name}** has collected **${pct(c.rate, 1)}** of what it has issued — `
-          + `${cur(ws, c.settledValue)} settled out of ${cur(ws, c.issuedValue)} across ${plural(c.issued.length, 'issued invoice')}. Drafts are left out.\n`
-          + `Settled invoices take **${plural(c.avgDays, 'day')}** to come in on average, against credit terms averaging ${c.avgTerms} days.\n`
-          + (late.length
-            ? `${cur(ws, outstandingValue(ws))} is still open, and ${cur(ws, late.reduce((t, i) => t + i.amount, 0))} of that is already past due.`
-            : `${cur(ws, outstandingValue(ws))} is still open and none of it is past due.`),
-        table: { head: ['Status', 'Invoices', 'Value'], rows: counts },
-        meta: `read ${ws.invoices.length} invoices · ${ws.name}`,
-        suggestions: ['Which invoices are overdue?', 'Top accounts by revenue', 'What is the revenue this quarter?'],
+        text: t('agent.collectionBody', {
+          name: ws.name,
+          rate: pct(c.rate, 1),
+          settled: cur(ws, c.settledValue),
+          issued: cur(ws, c.issuedValue),
+          invoices: cnt(c.issued.length, 'issuedInvoice'),
+          days: cnt(c.avgDays, 'day'),
+          terms: c.avgTerms,
+        }) + (late.length
+          ? t('agent.collectionLate', {
+            out: cur(ws, outstandingValue(ws)),
+            late: cur(ws, late.reduce((sum, i) => sum + i.amount, 0)),
+          })
+          : t('agent.collectionClean', { out: cur(ws, outstandingValue(ws)) })),
+        table: { head: TH('status', 'invoices', 'value'), rows: counts },
+        meta: t('agent.meta.readInvoices', { n: ws.invoices.length, name: ws.name }),
+        suggestions: [S('overdue'), S('top'), S('revenue')],
       };
     },
   },
   {
     id: 'dealowner',
-    match: [/who owns|owner of|whose deal|responsible for|handling|(biggest|largest|top|smallest) deal/i, 'who owns', 'owner', 'biggest deal'],
-    trace: 'matched the question against open deals',
+    match: [/who owns|owner of|whose deal|responsible for|handling|(biggest|largest|top|smallest) deal/i,
+      'who owns', 'owner', 'biggest deal', ...extraMatch('dealowner')],
+    trace: t('agent.trace.dealowner'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const deal = findDeal(ws, q);
       if (deal) {
         const cust = customerName(ws, deal.customerId);
         return {
-          text: `**${deal.owner}** owns *${deal.title}*.\n`
-            + `Stage ${stageLabel(deal.stage)}, worth ${cur(ws, deal.value)} at ${deal.probability}% likely, expected to close ${fmtDate(deal.closeDate)}.\n`
-            + `The account ${cust} is handled by ${(ws.customers.find((c) => c.id === deal.customerId) || {}).owner}.`,
-          meta: `matched 1 of ${ws.deals.length} deals`,
-          suggestions: ['Show the pipeline by stage', 'Who has admin access?', 'Which customers are at risk?'],
+          text: t('agent.dealOwner', {
+            owner: deal.owner,
+            title: dealTitle(ws, deal),
+            stage: stageLabel(deal.stage),
+            amount: cur(ws, deal.value),
+            p: deal.probability,
+            date: fmtDate(deal.closeDate),
+            account: cust,
+            accountOwner: (ws.customers.find((c) => c.id === deal.customerId) || {}).owner,
+          }),
+          meta: t('agent.meta.matched', { n: ws.deals.length }),
+          suggestions: [S('pipeline'), S('admin'), S('atRisk')],
         };
       }
       const top = openDeals(ws).sort((a, b) => b.value - a.value).slice(0, 5);
       return {
-        text: `I could not tell which deal you meant. These are the five biggest open ones in **${ws.name}** with their owners.`,
-        table: { head: ['Deal', 'Owner', 'Stage', 'Value'], rows: top.map((d) => [d.title, d.owner, stageLabel(d.stage), cur(ws, d.value)]) },
-        suggestions: ['Show the pipeline by stage', 'Who has admin access?'],
+        text: t('agent.dealOwnerNone', { name: ws.name }),
+        table: {
+          head: TH('deal', 'owner', 'stage', 'value'),
+          rows: top.map((d) => [dealTitle(ws, d), d.owner, stageLabel(d.stage), cur(ws, d.value)]),
+        },
+        suggestions: [S('pipeline'), S('admin')],
       };
     },
   },
   {
     id: 'atrisk',
-    match: [/at risk|at-risk|churn|losing|dormant|quiet accounts|unhappy/i, 'at risk', 'churn'],
-    trace: 'cross-checked status, overdue invoices and order gaps',
+    match: [/at risk|at-risk|churn|losing|dormant|quiet accounts|unhappy/i, 'at risk', 'churn', ...extraMatch('atrisk')],
+    trace: t('agent.trace.atrisk'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const risk = atRiskCustomers(ws);
-      if (!risk.length) return { text: `No account in **${ws.name}** is flagged at risk today.` };
-      const exposed = risk.reduce((t, r) => t + r.overdue, 0);
+      if (!risk.length) return { text: t('agent.atRiskNone', { name: ws.name }) };
+      const exposed = risk.reduce((sum, r) => sum + r.overdue, 0);
       return {
-        text: `**${risk.length} of ${ws.customers.length}** accounts in ${ws.name} need attention.\n`
-          + `${cur(ws, exposed)} of overdue money sits with them.\n`
-          + `Top of the list: ${risk[0].customer.name} — ${risk[0].reasons.join(', ')}.`,
+        text: t('agent.atRiskBody', {
+          n: risk.length,
+          total: ws.customers.length,
+          name: ws.name,
+          amount: cur(ws, exposed),
+          account: risk[0].customer.name,
+          why: risk[0].reasons.join(', '),
+        }),
         table: {
-          head: ['Account', 'Why', 'Overdue'],
-          rows: risk.slice(0, 6).map((r) => [r.customer.name, r.reasons.join(', '), r.overdue ? cur(ws, r.overdue) : '—']),
+          head: TH('account', 'why', 'overdue'),
+          rows: risk.slice(0, 6).map((r) => [r.customer.name, r.reasons.join(', '), r.overdue ? cur(ws, r.overdue) : t('common.dash')]),
         },
-        suggestions: ['Which invoices are overdue?', 'Top accounts by revenue', 'What changed this week?'],
+        suggestions: [S('overdue'), S('top'), S('changed')],
       };
     },
   },
   {
     id: 'seats',
-    match: [/seat|licence|license|plan|billing|how many people|users on/i, 'seats', 'plan'],
-    trace: 'counted members against the plan allowance',
+    match: [/seat|licence|license|plan|billing|how many people|users on/i, 'seats', 'plan', ...extraMatch('seats')],
+    trace: t('agent.trace.seats'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const used = seatsUsed(ws);
       const invited = ws.members.filter((m) => m.status === 'invited').length;
       const free = ws.seatsIncluded - used;
       return {
-        text: `**${ws.name}** is on the ${ws.plan} plan with ${ws.seatsIncluded} seats.\n`
-          + `${plural(used, 'seat')} taken, including ${plural(invited, 'invite')} not yet accepted, leaving **${free < 0 ? 0 : free}**.\n`
-          + (free < 0 ? `You are ${Math.abs(free)} seats over the allowance — change the plan in Settings.` : 'You are inside the allowance.'),
+        text: t('agent.seatsBody', {
+          name: ws.name,
+          plan: planLabel(ws.plan).toLowerCase(),
+          total: ws.seatsIncluded,
+          used: cnt(used, 'seat'),
+          invited: cnt(invited, 'invite'),
+          free: free < 0 ? 0 : free,
+        }) + (free < 0 ? t('agent.seatsOver', { n: Math.abs(free) }) : t('agent.seatsInside')),
         table: {
-          head: ['Role', 'People'],
-          rows: ['owner', 'admin', 'member', 'viewer'].map((r) => [r, String(ws.members.filter((m) => m.role === r).length)]),
+          head: TH('role', 'people'),
+          rows: ROLES.map((r) => [roleLabel(r), String(ws.members.filter((m) => m.role === r).length)]),
         },
-        suggestions: ['Who has admin access?', 'What changed this week?'],
+        suggestions: [S('admin'), S('changed')],
       };
     },
   },
   {
     id: 'changes',
-    match: [/what changed|this week|recent|latest|activity|happened|updates/i, 'what changed', 'this week'],
-    trace: 'read the workspace activity log',
+    match: [/what changed|this week|recent|latest|activity|happened|updates/i, 'what changed', 'this week', ...extraMatch('changes')],
+    trace: t('agent.trace.changes'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const week = changesSince(ws, 7);
-      if (!week.length) return { text: `Nothing has been recorded in **${ws.name}** in the last 7 days. Move a deal or settle an invoice and it will show up here.` };
+      if (!week.length) return { text: t('agent.changesNone', { name: ws.name }) };
       const byType = {};
       week.forEach((a) => { byType[a.type] = (byType[a.type] || 0) + 1; });
       return {
-        text: `**${plural(week.length, 'change')}** in ${ws.name} over the last 7 days: `
-          + `${Object.entries(byType).map(([k, v]) => `${v} ${k}`).join(', ')}.\n`
-          + `Most recent: ${week[0].text} (${ago(week[0].at)}, by ${week[0].actor}).`,
-        table: { head: ['When', 'Change', 'By'], rows: week.slice(0, 6).map((a) => [ago(a.at), a.text, a.actor]) },
-        suggestions: ['Show the pipeline by stage', 'Which invoices are overdue?'],
+        text: t('agent.changesBody', {
+          changes: cnt(week.length, 'change'),
+          name: ws.name,
+          breakdown: Object.entries(byType).map(([k, v]) => `${v} ${t(`activityType.${k}`)}`).join(', '),
+          text: activityText(week[0]),
+          when: ago(week[0].at),
+          actor: week[0].actor,
+        }),
+        table: {
+          head: TH('when', 'change', 'by'),
+          rows: week.slice(0, 6).map((a) => [ago(a.at), activityText(a), a.actor]),
+        },
+        suggestions: [S('pipeline'), S('overdue')],
       };
     },
   },
   {
     id: 'pipeline',
-    match: [/pipeline|stage|deals|forecast|weighted|win rate|opportunit/i, 'pipeline', 'stage'],
-    trace: 'grouped deals by stage',
+    match: [/pipeline|stage|deals|forecast|weighted|win rate|opportunit/i, 'pipeline', 'stage', ...extraMatch('pipeline')],
+    trace: t('agent.trace.pipeline'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const open = openDeals(ws);
-      const weighted = open.reduce((t, d) => t + (d.value * d.probability) / 100, 0);
+      const weighted = open.reduce((sum, d) => sum + (d.value * d.probability) / 100, 0);
       const closed = ws.deals.filter((d) => d.stage === 'won' || d.stage === 'lost');
       const winRate = closed.length ? (ws.deals.filter((d) => d.stage === 'won').length / closed.length) * 100 : 0;
       return {
-        text: `**${ws.name}** has ${open.length} open deals worth **${cur(ws, pipelineValue(ws))}**, `
-          + `or ${cur(ws, Math.round(weighted))} once you weight them by probability.\n`
-          + `Win rate on closed deals is ${pct(winRate)}.`,
+        text: t('agent.pipelineBody', {
+          name: ws.name,
+          n: open.length,
+          total: cur(ws, pipelineValue(ws)),
+          weighted: cur(ws, Math.round(weighted)),
+          rate: pct(winRate),
+        }),
         table: {
-          head: ['Stage', 'Deals', 'Value'],
+          head: TH('stage', 'deals', 'value'),
           rows: STAGES.map((s) => {
             const inStage = ws.deals.filter((d) => d.stage === s.id);
-            return [s.label, String(inStage.length), cur(ws, inStage.reduce((t, d) => t + d.value, 0))];
+            return [stageLabel(s.id), String(inStage.length), cur(ws, inStage.reduce((sum, d) => sum + d.value, 0))];
           }),
         },
-        suggestions: ['Who owns the biggest deal?', 'What is the revenue this quarter?'],
+        suggestions: [S('biggest'), S('revenue')],
       };
     },
   },
   {
     id: 'topcustomers',
-    match: [/top (account|customer|client)|best (account|customer|client)|biggest (account|customer|client)|who spends/i, 'top accounts', 'best customers'],
-    trace: 'ranked accounts by settled invoices',
+    match: [/top (account|customer|client)|best (account|customer|client)|biggest (account|customer|client)|who spends/i,
+      'top accounts', 'best customers', ...extraMatch('topcustomers')],
+    trace: t('agent.trace.topcustomers'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const rows = settledByCustomer(ws);
-      if (!rows.length) return { text: `No invoice in **${ws.name}** has been settled yet, so there is nothing to rank.` };
-      const grand = rows.reduce((t, r) => t + r[1], 0);
-      const top3 = rows.slice(0, 3).reduce((t, r) => t + r[1], 0);
+      if (!rows.length) return { text: t('agent.topNone', { name: ws.name }) };
+      const grand = rows.reduce((sum, r) => sum + r[1], 0);
+      const top3 = rows.slice(0, 3).reduce((sum, r) => sum + r[1], 0);
       return {
-        text: `The top three accounts in **${ws.name}** account for **${pct((top3 / grand) * 100, 1)}** of settled revenue.\n`
-          + `${customerName(ws, rows[0][0])} leads with ${cur(ws, rows[0][1])}.`,
+        text: t('agent.topBody', {
+          name: ws.name,
+          share: pct((top3 / grand) * 100, 1),
+          account: customerName(ws, rows[0][0]),
+          amount: cur(ws, rows[0][1]),
+        }),
         table: {
-          head: ['Account', 'Settled', 'Share'],
+          head: TH('account', 'settled', 'share'),
           rows: rows.slice(0, 6).map(([id, v]) => [customerName(ws, id), cur(ws, v), pct((v / grand) * 100, 1)]),
         },
-        suggestions: ['Which customers are at risk?', 'What is the revenue this quarter?'],
+        suggestions: [S('atRisk'), S('revenue')],
       };
     },
   },
   {
     id: 'access',
-    match: [/admin|access|permission|role|who can|team|staff list/i, 'admin', 'roles'],
-    trace: 'read the member list and role matrix',
+    match: [/admin|access|permission|role|who can|team|staff list/i, 'admin', 'roles', ...extraMatch('access')],
+    trace: t('agent.trace.access'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const privileged = ws.members.filter((m) => m.role === 'owner' || m.role === 'admin');
       const stale = ws.members.filter((m) => m.status === 'active' && (Date.now() - new Date(m.lastActive).getTime()) > 21 * 86400000);
-      const can = (role) => Object.entries(ws.matrix[role]).filter(([, v]) => v).map(([k]) => k).join(', ');
+      const can = (role) => Object.entries(ws.matrix[role]).filter(([, v]) => v)
+        .map(([k]) => permLabel(k).toLowerCase()).join(', ');
       return {
-        text: `**${privileged.length} people** hold owner or admin rights in ${ws.name}: ${privileged.map((m) => m.name).join(', ')}.\n`
-          + `Admins currently have: ${can('admin')}. Members have: ${can('member')}.\n`
-          + (stale.length ? `${stale.length} active accounts have not signed in for 3 weeks or more.` : 'Everyone has signed in within the last three weeks.'),
+        text: t('agent.accessBody', {
+          n: privileged.length,
+          name: ws.name,
+          who: privileged.map((m) => m.name).join(', '),
+          admin: can('admin'),
+          member: can('member'),
+        }) + (stale.length ? t('agent.accessStale', { n: stale.length }) : t('agent.accessFresh')),
         table: {
-          head: ['Person', 'Role', 'Status', 'Last active'],
-          rows: ws.members.slice(0, 8).map((m) => [m.name, m.role, m.status, m.status === 'invited' ? 'never' : ago(m.lastActive)]),
+          head: TH('person', 'role', 'status', 'lastActive'),
+          rows: ws.members.slice(0, 8).map((m) => [m.name, roleLabel(m.role), statusLabel(m.status),
+            m.status === 'invited' ? t('common.never') : ago(m.lastActive)]),
         },
-        suggestions: ['How many seats are left?', 'What changed this week?'],
+        suggestions: [S('seats'), S('changed')],
       };
     },
   },
   {
     id: 'workspaces',
-    match: [/workspace|tenant|other business|compare|switch|all three/i, 'workspace', 'tenant'],
-    trace: 'compared all workspaces on this device',
+    match: [/workspace|tenant|other business|compare|switch|all three/i, 'workspace', 'tenant', ...extraMatch('workspaces')],
+    trace: t('agent.trace.workspaces'),
     answer: (q, ctx) => {
       const s = ctx.state;
       const rows = WORKSPACE_IDS.map((id) => {
         const w = s.workspaces[id];
-        return [w.name + (id === s.activeWs ? ' (open)' : ''), String(w.customers.length),
-          cur(w, pipelineValue(w)), cur(w, overdueInvoices(w).reduce((t, i) => t + i.amount, 0))];
+        return [w.name + (id === s.activeWs ? t('agent.wsOpen') : ''), String(w.customers.length),
+          cur(w, pipelineValue(w)), cur(w, overdueInvoices(w).reduce((sum, i) => sum + i.amount, 0))];
       });
       return {
-        text: `There are ${WORKSPACE_IDS.length} workspaces in this demo and every screen is scoped to the one selected in the sidebar. `
-          + `You are currently in **${ctx.ws.name}**. Switching does not mix data — the figures below are computed separately.`,
-        table: { head: ['Workspace', 'Accounts', 'Pipeline', 'Overdue'], rows },
-        suggestions: ['What is the revenue this quarter?', 'How many seats are left?'],
+        text: t('agent.wsBody', { n: WORKSPACE_IDS.length, name: ctx.ws.name }),
+        table: { head: TH('workspace', 'accounts', 'pipeline', 'overdue'), rows },
+        suggestions: [S('revenue'), S('seats')],
       };
     },
   },
   {
     id: 'account',
-    match: [/tell me about|look up|details on|account |customer |contact for/i, 'tell me about', 'look up'],
-    trace: 'searched the account book',
+    match: [/tell me about|look up|details on|account |customer |contact for/i, 'tell me about', 'look up', ...extraMatch('account')],
+    trace: t('agent.trace.account'),
     answer: (q, ctx) => {
       const { ws } = ctx;
       const c = findCustomer(ws, q);
       if (!c) {
         return {
-          text: `I could not find that account in **${ws.name}**. Try one of these names, or ask about the pipeline instead.`,
-          table: { head: ['Accounts you can ask about'], rows: ws.customers.slice(0, 6).map((x) => [x.name]) },
+          text: t('agent.accountNone', { name: ws.name }),
+          table: { head: TH('accountsAsk'), rows: ws.customers.slice(0, 6).map((x) => [x.name]) },
         };
       }
       const invs = ws.invoices.filter((i) => i.customerId === c.id);
-      const settled = invs.filter((i) => i.status === 'paid').reduce((t, i) => t + i.amount, 0);
+      const settled = invs.filter((i) => i.status === 'paid').reduce((sum, i) => sum + i.amount, 0);
       const open = invs.filter((i) => i.status === 'sent' || i.status === 'overdue');
       const deals = ws.deals.filter((d) => d.customerId === c.id);
       return {
-        text: `**${c.name}** — ${c.segment}, owned by ${c.owner}, status ${c.status}.\n`
-          + `Contact ${c.contactName} on ${c.contactEmail}. Credit terms ${c.creditDays} days, last order ${ago(c.lastOrder)}.\n`
-          + `Settled ${cur(ws, settled)} across ${invs.length} invoices, ${open.length} still open worth ${cur(ws, open.reduce((t, i) => t + i.amount, 0))}.`,
-        table: deals.length ? { head: ['Deal', 'Stage', 'Value'], rows: deals.map((d) => [d.title, stageLabel(d.stage), cur(ws, d.value)]) } : null,
-        suggestions: ['Which customers are at risk?', 'Which invoices are overdue?'],
+        text: t('agent.accountBody', {
+          name: c.name,
+          segment: segmentLabel(c.segment),
+          owner: c.owner,
+          status: statusLabel(c.status),
+          contact: c.contactName,
+          email: c.contactEmail,
+          days: c.creditDays,
+          ago: ago(c.lastOrder),
+          settled: cur(ws, settled),
+          n: invs.length,
+          open: open.length,
+          openValue: cur(ws, open.reduce((sum, i) => sum + i.amount, 0)),
+        }),
+        table: deals.length
+          ? {
+            head: TH('deal', 'stage', 'value'),
+            rows: deals.map((d) => [dealTitle(ws, d), stageLabel(d.stage), cur(ws, d.value)]),
+          }
+          : null,
+        suggestions: [S('atRisk'), S('overdue')],
       };
     },
   },
   {
     id: 'help',
-    match: [/what can you|what do you do|help|how do i|commands|capabilities|can you actually/i, 'help', 'what can you do'],
-    trace: 'listed the intents and actions wired to this workspace',
+    match: [/what can you|what do you do|help|how do i|commands|capabilities|can you actually/i,
+      'help', 'what can you do', ...extraMatch('help')],
+    trace: t('agent.trace.help'),
     answer: (q, ctx) => {
       const { ws } = ctx;
-      const account = ws.customers[0] ? ws.customers[0].name : 'an account';
+      const account = ws.customers[0] ? ws.customers[0].name : t('customers.unknown');
       const deal = openDeals(ws)[0];
       const dealAccount = deal ? customerName(ws, deal.customerId) : account;
       const late = overdueInvoices(ws)[0];
-      const invNumber = late ? late.number : (ws.invoices[0] || { number: 'the oldest overdue invoice' }).number;
+      const invNumber = late ? late.number : (ws.invoices[0] || { number: t('common.dash') }).number;
       return {
-        text: `Two halves. I **answer** from whatever is in **${ws.name}** right now, and I **do** six things to it — `
-          + 'each one shows you the exact record first and waits for you to press the button.\n\n'
-          + 'Things I can do, with an example of each:\n\n'
-          + `- move a deal — "move the ${dealAccount} deal to negotiation" → the card changes stage on the board and the open pipeline total moves with it\n`
-          + `- log a note — "log a note on ${account}: they asked for 45 day terms" → the note appears at the top of that account's drawer, filed under your name\n`
-          + `- settle an invoice — "mark ${invNumber} paid" → status goes sent or overdue → paid, and outstanding drops by the invoice amount\n`
-          + `- change an account — "flag ${account} as at risk" → the status pill changes and it joins the at-risk list\n`
-          + '- invite a person — "invite Priya Menon as an admin" → a pending invite on the Team screen and one more seat used\n'
-          + `- open a deal — "new deal for ${account}, 4 lakh, proposal stage" → a new card in Proposal worth ${cur(ws, 400000)}\n\n`
-          + 'Things I can answer: revenue this quarter and by month, overdue invoices and aging, the collection rate, '
-          + 'who owns a deal, at-risk accounts and why, seat and plan usage, what changed this week, pipeline by stage, '
-          + 'top accounts, who holds admin, and how the three workspaces compare.\n\n'
-          + 'If a name is ambiguous I stop and ask rather than guess, and I never write anything without the button.',
+        text: t('agent.help', {
+          name: ws.name,
+          dealAccount,
+          account,
+          number: invNumber,
+          amount: cur(ws, 400000),
+        }),
         suggestions: [
-          deal ? `Move the ${dealAccount} deal to negotiation` : 'Which invoices are overdue?',
-          `Log a note on ${account}: credit review due`,
-          'Mark the oldest overdue invoice paid',
-          'What is the revenue this quarter?',
+          deal ? S('moveDeal', { account: dealAccount }) : S('overdue'),
+          S('note', { account }),
+          S('markOldest'),
+          S('revenue'),
         ],
       };
     },
   },
 ];
-
-const fallbacks = [
-  'I only answer from the data in this workspace. Ask me about revenue, overdue invoices, the pipeline or seat usage — or ask me to change something.',
-  'That one is outside the demo dataset. Try "which invoices are overdue" and I will pull the aging table.',
-  'No match for that. I can tell you what changed this week, or move a deal a stage if you name it.',
-  'I could not map that to anything in the workspace. Ask "what can you do?" and I will list the six things I can change.',
-];
+return intents;
+}
 
 export function createCopilot(opts = {}) {
   showScreen = typeof opts.show === 'function' ? opts.show : () => {};
   const ws = activeWorkspace();
   return new Assistant({
-    name: 'Opsboard Copilot',
-    initials: 'OC',
-    tag: 'Reads and changes this workspace',
-    greeting: `I am the Opsboard Copilot. I work on the workspace open in the sidebar — right now that is **${ws.name}**.\n\n`
-      + 'Ask me about revenue, receivables, the pipeline or access — or tell me to do something: move a deal, log a note, '
-      + 'settle an invoice, flag an account, invite someone, open a new deal. I always show you the record first and wait for you to confirm.',
-    suggestions: ['What can you do?', 'Which invoices are overdue?', 'Mark the oldest overdue invoice paid', 'What is the revenue this quarter?'],
-    intents,
-    fallbacks,
-    note: 'Simulated assistant — answers are matched against this app\'s demo data in your browser. Not a connected model, nothing is sent anywhere.',
+    name: t('brand.copilot'),
+    initials: t('brand.initials'),
+    tag: t('agent.tag'),
+    greeting: t('agent.greeting', { name: ws.name }),
+    suggestions: [S('whatCanYouDo'), S('overdue'), S('markOldest'), S('revenue')],
+    intents: buildIntents(),
+    fallbacks: tList('agent.fallbacks'),
+    note: t('agent.note'),
+    /* the engine's own chrome — the header buttons, the box, the two words it
+       says while it works — comes out of the same dictionary as everything else */
+    labels: {
+      open: t('assist.open'),
+      fabTitle: t('assist.fabTitle'),
+      clear: t('assist.clear'),
+      close: t('assist.close'),
+      send: t('assist.send'),
+      placeholder: t('assist.placeholder'),
+      you: t('assist.you'),
+      working: t('assist.working'),
+      done: t('assist.done'),
+      applied: t('assist.applied'),
+      edge: t('assist.edge'),
+      failed: t('assist.failed'),
+      searched: t('assist.searched'),
+    },
     context: () => ({ ws: activeWorkspace(), state: store.state, months: monthKeys(6), n: num }),
   });
 }
 
-export { intents as copilotIntents };
+export { buildIntents as copilotIntents };

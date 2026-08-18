@@ -5,12 +5,14 @@
 
 import { h, icon, money } from '../lib/ui.js';
 import { currencySymbol } from './data.js';
+import { t } from './main.js';
 
 /* Money in the active workspace currency. */
 export const wsMoney = (ws, n) => money(n, currencySymbol(ws.currency));
 
-/* "1 invoice" / "4 invoices" — status lines read badly without it. */
-export const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
+/* "1 invoice" / "4 invoices", and the four Arabic forms of the same thing.
+   The dictionary holds the noun; this only picks the shape. */
+export const plural = (n, key) => t(`count.${key}`, { n });
 
 /* An inline stroke icon as a real DOM node. */
 export function iconEl(name, cls = '') {
@@ -25,7 +27,13 @@ const PILL_KIND = {
 };
 export function statusPill(value, label) {
   const kind = PILL_KIND[value] || '';
-  return h('span', { class: `pill${kind ? ` pill--${kind}` : ''}` }, label || value);
+  /* a status with no word of its own falls back to the stored id, exactly as
+     it did before there was a dictionary to look it up in */
+  const looked = t(`statuses.${value}`);
+  const text = label !== undefined && label !== null
+    ? label
+    : (looked === `statuses.${value}` ? value : looked);
+  return h('span', { class: `pill${kind ? ` pill--${kind}` : ''}` }, text);
 }
 
 export function pageHead(title, sub, actions) {
@@ -75,7 +83,7 @@ export function openDrawer({ title, sub, body, footer }) {
       h('h2', { class: 'truncate', style: 'font-size:16px' }, title),
       sub ? h('div', { class: 'label' }, sub) : null),
     h('button', {
-      class: 'btn btn--ghost btn--icon', 'aria-label': 'Close panel',
+      class: 'btn btn--ghost btn--icon', 'aria-label': t('common.closePanel'), title: t('common.closePanel'),
       onclick: close, html: icon('x'),
     })));
   const bodyEl = h('div', { class: 'drawer__body' });
