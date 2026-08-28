@@ -8,6 +8,8 @@ No build step, no dependencies, no network calls. Open it from any static file s
 
 **Repository:** <https://github.com/nasvih/opsboard-business-operations-platform>
 
+**Live:** [opsboard.nasvih.in](https://opsboard.nasvih.in)
+
 **Author:** Muhammed Nasvih V — [nasvih.in](https://www.nasvih.in) · [github.com/nasvih](https://github.com/nasvih)
 
 The source is published so it can be read, run and evaluated. It is not open source — see

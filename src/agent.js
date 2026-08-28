@@ -1218,9 +1218,9 @@ export function createCopilot(opts = {}) {
     note: t('agent.note'),
     /* the engine's own chrome — the header buttons, the box, the two words it
        says while it works — comes out of the same dictionary as everything else */
-    labels: {
-      open: t('assist.open'),
-      fabTitle: t('assist.fabTitle'),
+    ui: {
+      openAria: (name) => t('assist.open', { name }),
+      fabTitle: (name) => t('assist.fabTitle', { name }),
       clear: t('assist.clear'),
       close: t('assist.close'),
       send: t('assist.send'),

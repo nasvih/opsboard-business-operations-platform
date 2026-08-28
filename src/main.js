@@ -37,7 +37,12 @@ export function tList(path) { return i18n.list(path); }
 export const isRtl = () => i18n.isRtl;
 
 /* The two shared libraries render a handful of words of their own. */
-setAgoStrings({ now: t('time.now'), m: t('time.m'), h: t('time.h'), d: t('time.d') });
+setAgoStrings({
+  justNow: t('time.now'),
+  m: (n) => t('time.m', { n }),
+  h: (n) => t('time.h', { n }),
+  d: (n) => t('time.d', { n }),
+});
 setUiStrings({ cancel: t('common.cancel'), confirm: t('common.confirm'), close: t('common.close') });
 
 const NAV = [
@@ -757,8 +762,8 @@ const installBtn = FRAMED ? null : initPWA({
   onNote: (msg) => toast(msg, 'info'),
   labels: {
     install: t('pwa.install'),
-    installTitle: t('pwa.installTitle', { app: t('brand.name') }),
-    installed: t('pwa.installed', { app: t('brand.name') }),
+    title: (app) => t('pwa.installTitle', { app }),
+    installed: (app) => t('pwa.installed', { app }),
     dismissed: t('pwa.dismissed'),
     ios: t('pwa.ios'),
     other: t('pwa.other'),
